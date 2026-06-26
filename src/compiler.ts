@@ -20,8 +20,10 @@ export function wildcardToRegex(pattern: string): string {
 }
 
 export function translateSubstitution(redirectUrl: string): string {
-  // User writes $1..$9; DNR regexSubstitution uses \1..\9.
-  // Escape pre-existing backslashes first so they survive literally.
+  // `$1`..`$9` is the ONLY supported capture-group substitution syntax.
+  // Pre-existing backslashes are escaped first so they survive as literals,
+  // then `$n` is translated to DNR's `\n` form. A literal `\1` written by the
+  // user is therefore treated as text, not a backreference.
   return redirectUrl.replace(/\\/g, '\\\\').replace(/\$(\d)/g, '\\$1');
 }
 

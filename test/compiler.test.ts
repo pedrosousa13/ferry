@@ -90,6 +90,8 @@ describe('compile with exclude', () => {
 
   it('does not emit an allow rule when excludePattern is empty', () => {
     const rule = createRule({ id: 'a', includePattern: 'a/*', redirectUrl: 'A/$1' });
-    expect(compile([rule]).every((r) => r.action.type === 'redirect')).toBe(true);
+    const out = compile([rule]);
+    expect(out).toHaveLength(1);
+    expect(out[0].action.type).toBe('redirect');
   });
 });
