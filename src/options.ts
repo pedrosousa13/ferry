@@ -122,6 +122,7 @@ function test() {
   if (!example) { $('#test-result').textContent = 'Enter an example URL to test.'; return; }
   const dnr = compile([rule]).find((r) => r.action.type === 'redirect');
   if (!dnr) { $('#test-result').textContent = 'No redirect produced.'; return; }
+  if (!dnr.condition.regexFilter) { $('#test-result').textContent = 'No pattern to test.'; return; }
   try {
     const m = example.match(new RegExp(dnr.condition.regexFilter));
     if (!m) { $('#test-result').textContent = 'No match for the example URL.'; return; }
@@ -139,7 +140,7 @@ function exportRules() {
   a.href = URL.createObjectURL(blob);
   a.download = 'ferry-rules.json';
   a.click();
-  URL.revokeObjectURL(a.href);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 async function importRules(ev: Event) {
@@ -148,12 +149,11 @@ async function importRules(ev: Event) {
   let data: any;
   try { data = JSON.parse(await file.text()); } catch { $('#import-msg').textContent = 'Invalid JSON.'; return; }
   const incoming: any[] = data.redirects ?? data.rules ?? [];
-  let dropped = 0;
+  let skipped = 0;
   for (const r of incoming) {
     const usesTransform = r.processMatches && r.processMatches !== 'noProcessing';
+    if (usesTransform) { skipped++; continue; }
     const types = (r.resourceTypes ?? r.appliesTo ?? []) as string[];
-    const usesHistory = types.includes('history');
-    if (usesTransform || usesHistory) dropped++;
     rules.push(createRule({
       description: r.description,
       patternType: r.patternType === 'R' ? 'regex' : 'wildcard',
@@ -165,9 +165,10 @@ async function importRules(ev: Event) {
     }));
   }
   await persist();
+  const imported = incoming.length - skipped;
   $('#import-msg').textContent =
-    `Imported ${incoming.length} rule(s).` +
-    (dropped ? ` ${dropped} used unsupported features (transforms / history) — those were dropped.` : '');
+    `Imported ${imported} rule(s).` +
+    (skipped ? ` Skipped ${skipped} rule(s) that need transforms (base64 / URL decode), which Ferry can't perform.` : '');
 }
 
 function init() {
