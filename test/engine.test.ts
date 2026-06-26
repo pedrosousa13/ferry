@@ -31,8 +31,7 @@ describe('syncRules', () => {
     state.rules = [createRule({ id: 'a', includePattern: 'https://x/*', redirectUrl: 'https://y/$1' })];
     await syncRules();
     expect(updateDynamicRules).toHaveBeenCalledTimes(1);
-    const calls = updateDynamicRules.mock.calls as any;
-    const arg = calls[0][0] as any;
+    const arg = (updateDynamicRules.mock.calls as any)[0][0];
     expect(arg.removeRuleIds).toEqual([99]);
     expect(arg.addRules).toHaveLength(1);
     expect(arg.addRules[0].action.type).toBe('redirect');
@@ -42,8 +41,7 @@ describe('syncRules', () => {
     state.disabled = true;
     state.rules = [createRule({ id: 'a', includePattern: 'https://x/*', redirectUrl: 'https://y/$1' })];
     await syncRules();
-    const calls = updateDynamicRules.mock.calls as any;
-    const arg = calls[0][0] as any;
+    const arg = (updateDynamicRules.mock.calls as any)[0][0];
     expect(arg.removeRuleIds).toEqual([99]);
     expect(arg.addRules).toEqual([]);
   });
