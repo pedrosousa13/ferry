@@ -61,3 +61,35 @@ describe('compile', () => {
     expect(out[0].priority).toBe(1);
   });
 });
+
+describe('compile with exclude', () => {
+  it('emits a higher-priority allow rule for the exclude pattern', () => {
+    const rule = createRule({
+      id: 'a',
+      patternType: 'wildcard',
+      includePattern: 'https://example.com/*',
+      excludePattern: 'https://example.com/keep/*',
+      redirectUrl: 'https://dest.com/$1',
+      resourceTypes: ['main_frame'],
+    });
+    expect(compile([rule])).toEqual([
+      {
+        id: 1,
+        priority: 1,
+        action: { type: 'redirect', redirect: { regexSubstitution: 'https://dest.com/\\1' } },
+        condition: { regexFilter: '^https://example\\.com/(.*?)$', resourceTypes: ['main_frame'] },
+      },
+      {
+        id: 2,
+        priority: 2,
+        action: { type: 'allow' },
+        condition: { regexFilter: '^https://example\\.com/keep/(.*?)$', resourceTypes: ['main_frame'] },
+      },
+    ]);
+  });
+
+  it('does not emit an allow rule when excludePattern is empty', () => {
+    const rule = createRule({ id: 'a', includePattern: 'a/*', redirectUrl: 'A/$1' });
+    expect(compile([rule]).every((r) => r.action.type === 'redirect')).toBe(true);
+  });
+});

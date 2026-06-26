@@ -41,6 +41,14 @@ export function compile(rules: Rule[]): DnrRule[] {
       action: { type: 'redirect', redirect: { regexSubstitution: translateSubstitution(rule.redirectUrl) } },
       condition: { regexFilter: toRegexFilter(rule, rule.includePattern), resourceTypes: rule.resourceTypes },
     });
+    if (rule.excludePattern) {
+      out.push({
+        id: i * 2 + 2,
+        priority: basePriority + n, // strictly higher than any redirect priority (max n)
+        action: { type: 'allow' },
+        condition: { regexFilter: toRegexFilter(rule, rule.excludePattern), resourceTypes: rule.resourceTypes },
+      });
+    }
   });
   return out;
 }
