@@ -55,14 +55,31 @@ control toggles all checkboxes. Default checked stays `main_frame` only.
 - Errors and test result as inline colored chips.
 - Accessible: labels tied to inputs, visible focus states, sufficient contrast.
 
-### 3. Drag-and-drop import
+### 3. Drag-and-drop import + replace/append + dedupe
 
 - Whole window is a drop target. Dragging a file over shows a dim overlay
   ("Drop JSON to import"). Dropping a `.json` file imports it.
 - Keep the click-to-browse file input.
 - Refactor the existing import handler to `importFile(file: File)`; both the input
-  `change` event and the window `drop` event call it. Same skip-transforms safety and
-  result message as today.
+  `change` event and the window `drop` event call it. Same skip-transforms safety.
+- When rules already exist, an in-page modal (not a native dialog) asks
+  **Replace** (discard current rules, use the imported set) or **Append** (add to
+  current rules), with **Cancel**. With no existing rules, import directly.
+- Duplicate handling: a rule's signature is
+  `patternType | includePattern | excludePattern | redirectUrl | sorted(resourceTypes)`.
+  Duplicates are dropped — within the imported set, and (on Append) against existing
+  rules. The result message reports imported / skipped-duplicate / skipped-transform
+  counts.
+
+### 4. Enable/disable rules temporarily
+
+- Per-rule: each rule card already has an enable/disable toggle switch (sets
+  `rule.disabled`; `compile()` skips disabled rules).
+- All rules at once: a master toggle in a control bar at the top of the page, reusing
+  the existing `disabled` storage flag (`getDisabled`/`setDisabled`) that the popup and
+  engine already use. Turning it off pauses every rule without deleting anything; the
+  rules list shows a paused state. No engine change — `engine.ts` already re-syncs on
+  the `disabled` storage change.
 
 ## Out of scope
 
