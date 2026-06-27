@@ -1,9 +1,10 @@
-import { Rule, createRule, validateRule, ALL_RESOURCE_TYPES, ResourceType } from './rule-model';
-import { getRules, setRules, getDisabled, setDisabled } from './storage';
+import { Rule, createRule, validateRule, ALL_RESOURCE_TYPES, ResourceType, WhitelistEntry, createWhitelistEntry, validateWhitelistEntry } from './rule-model';
+import { getRules, setRules, getDisabled, setDisabled, getWhitelist, setWhitelist } from './storage';
 import { compile, lintRule } from './compiler';
 
 let rules: Rule[] = [];
 let masterDisabled = false;
+let whitelist: WhitelistEntry[] = [];
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const $i = (sel: string) => document.querySelector(sel) as HTMLInputElement;
 
@@ -498,6 +499,60 @@ function setupDragDrop() {
   });
 }
 
+function wlToggle(entry: WhitelistEntry, i: number): HTMLLabelElement {
+  const wrap = document.createElement('label');
+  wrap.className = 'switch';
+  wrap.title = entry.disabled ? 'Disabled — click to enable' : 'Enabled — click to disable';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = !entry.disabled;
+  input.setAttribute('aria-label', entry.disabled ? 'Enable entry' : 'Disable entry');
+  input.addEventListener('change', () => wlToggleAt(i));
+  const track = document.createElement('span');
+  track.className = 'track';
+  wrap.append(input, track);
+  return wrap;
+}
+
+function wlItem(entry: WhitelistEntry, i: number): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'wl-item' + (entry.disabled ? ' disabled' : '');
+  const pattern = document.createElement('span');
+  pattern.className = 'pattern';
+  pattern.textContent = entry.pattern;
+  row.append(pattern, wlToggle(entry, i), iconButton('delete', 'Delete', () => wlDel(i), { danger: true }));
+  return row;
+}
+
+function renderWhitelist() {
+  const list = $('#whitelist');
+  list.innerHTML = '';
+  if (whitelist.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.innerHTML = '<strong>No whitelist entries</strong>Add a URL pattern above to protect it from all redirects.';
+    list.appendChild(empty);
+    return;
+  }
+  whitelist.forEach((entry, i) => list.appendChild(wlItem(entry, i)));
+}
+
+async function persistWhitelist() { await setWhitelist(whitelist); renderWhitelist(); }
+function wlToggleAt(i: number) { whitelist[i] = { ...whitelist[i], disabled: !whitelist[i].disabled }; void persistWhitelist(); }
+function wlDel(i: number) { whitelist.splice(i, 1); void persistWhitelist(); }
+
+function wlAdd() {
+  const input = $i('#wl-input');
+  const entry = createWhitelistEntry({ pattern: input.value.trim() });
+  const errors = validateWhitelistEntry(entry);
+  const err = $('#wl-error');
+  if (errors.length) { err.textContent = errors.join(' '); return; }
+  err.textContent = '';
+  whitelist.push(entry);
+  input.value = '';
+  void persistWhitelist();
+}
+
 function activateTab(id: string) {
   document.querySelectorAll<HTMLElement>('[role="tab"]').forEach((t) => {
     const selected = t.id === id;
@@ -533,16 +588,20 @@ function init() {
   $('#export').addEventListener('click', exportRules);
   $i('#import').addEventListener('change', onImportInput);
   $('#paste-add').addEventListener('click', addFromPaste);
+  $('#wl-add').addEventListener('click', wlAdd);
+  $i('#wl-input').addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') wlAdd(); });
   $i('#master-toggle').addEventListener('change', async () => {
     masterDisabled = !$i('#master-toggle').checked;
     await setDisabled(masterDisabled);
     render();
   });
   setupDragDrop();
-  void Promise.all([getRules(), getDisabled()]).then(([r, d]) => {
+  void Promise.all([getRules(), getDisabled(), getWhitelist()]).then(([r, d, w]) => {
     rules = r;
     masterDisabled = d;
+    whitelist = w;
     render();
+    renderWhitelist();
   });
 }
 

@@ -181,6 +181,25 @@
     }
     .empty strong { color: var(--text); display: block; margin-bottom: .25rem; }
 
+    /* ---- whitelist ---- */
+    .wl-intro { color: var(--muted); font-size: .88rem; margin: 0 0 1rem; }
+    .wl-add { display: flex; gap: .6rem; }
+    .wl-add input { flex: 1; }
+    #wl-error { color: var(--danger); font-size: .85rem; margin-top: .3rem; }
+    #whitelist { display: flex; flex-direction: column; gap: .6rem; margin-top: 1rem; }
+    .wl-item {
+      display: flex; align-items: center; gap: .8rem;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: .6rem .85rem; transition: opacity .15s;
+    }
+    .wl-item.disabled { opacity: .55; }
+    .wl-item .pattern {
+      flex: 1; min-width: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem;
+      overflow-x: auto; white-space: nowrap;
+    }
+
     /* ---- form ---- */
     .field { margin: 0 0 .9rem; }
     .field > label { display: block; font-weight: 600; font-size: .9rem; margin-bottom: .3rem; }
@@ -307,6 +326,7 @@
 
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button class="tab" role="tab" id="tab-rules" aria-controls="panel-rules" aria-selected="true">Rules</button>
+      <button class="tab" role="tab" id="tab-whitelist" aria-controls="panel-whitelist" aria-selected="false" tabindex="-1">Whitelist</button>
       <button class="tab" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false" tabindex="-1">Settings</button>
     </nav>
 
@@ -376,6 +396,22 @@
         <button id="test" class="btn">Test</button>
         <button id="reset" class="btn">Clear form</button>
       </div>
+    </section>
+    </section>
+
+    <section id="panel-whitelist" role="tabpanel" aria-labelledby="tab-whitelist" hidden>
+    <section class="card">
+      <h2>Never redirect these URLs</h2>
+      <p class="wl-intro">Requests matching any pattern here are left alone, no matter which rule would otherwise redirect them. Wildcards (<code>*</code>) match any run of characters.</p>
+      <div class="field">
+        <label for="wl-input">Add a URL pattern</label>
+        <div class="wl-add">
+          <input type="text" id="wl-input" placeholder="*://*.github.com/*">
+          <button id="wl-add" class="btn btn-primary">Add</button>
+        </div>
+        <div id="wl-error"></div>
+      </div>
+      <div id="whitelist"></div>
     </section>
     </section>
 
