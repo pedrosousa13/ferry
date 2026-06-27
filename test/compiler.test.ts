@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { compile, wildcardToRegex, translateSubstitution, lintRule } from '../src/compiler';
-import { createRule } from '../src/rule-model';
+import { createRule, createWhitelistEntry, ALL_RESOURCE_TYPES } from '../src/rule-model';
 
 describe('wildcardToRegex', () => {
   it('escapes metachars and turns * into a capture group, anchored', () => {
@@ -155,5 +155,54 @@ describe('lintRule', () => {
       redirectUrl: 'https://old.reddit.com/$1',
     });
     expect(lintRule(rule)).toEqual([]);
+  });
+});
+
+describe("compile with whitelist", () => {
+  it("emits an allow rule per enabled entry, above all redirects", () => {
+    const r = createRule({ id: "a", includePattern: "https://example.com/*", redirectUrl: "https://dest.com/$1" });
+    const w = createWhitelistEntry({ id: "w", pattern: "https://example.com/safe/*" });
+    expect(compile([r], [w])).toEqual([
+      {
+        id: 1,
+        priority: 1,
+        action: { type: "redirect", redirect: { regexSubstitution: "https://dest.com/\\1" } },
+        condition: { regexFilter: "^https://example\\.com/(.*?)$", resourceTypes: ["main_frame"] },
+      },
+      {
+        id: 3,
+        priority: 3,
+        action: { type: "allow" },
+        condition: { regexFilter: "^https://example\\.com/safe/(.*?)$", resourceTypes: ALL_RESOURCE_TYPES },
+      },
+    ]);
+  });
+
+  it("works with no rules (priority 1, ids from 1)", () => {
+    const w = createWhitelistEntry({ id: "w", pattern: "https://a.com/*" });
+    expect(compile([], [w])).toEqual([
+      {
+        id: 1,
+        priority: 1,
+        action: { type: "allow" },
+        condition: { regexFilter: "^https://a\\.com/(.*?)$", resourceTypes: ALL_RESOURCE_TYPES },
+      },
+    ]);
+  });
+
+  it("assigns unique ids to multiple entries at the same priority", () => {
+    const a = createWhitelistEntry({ id: "a", pattern: "https://a.com/*" });
+    const b = createWhitelistEntry({ id: "b", pattern: "https://b.com/*" });
+    expect(compile([], [a, b]).map((r) => [r.id, r.priority])).toEqual([[1, 1], [2, 1]]);
+  });
+
+  it("skips disabled whitelist entries", () => {
+    const w = createWhitelistEntry({ id: "w", pattern: "https://a.com/*", disabled: true });
+    expect(compile([], [w])).toEqual([]);
+  });
+
+  it("defaults whitelist to empty (back-compat call)", () => {
+    const r = createRule({ id: "a", includePattern: "a/*", redirectUrl: "A/$1" });
+    expect(compile([r])).toHaveLength(1);
   });
 });
