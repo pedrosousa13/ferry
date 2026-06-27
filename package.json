@@ -1,0 +1,32 @@
+{
+  "name": "ferry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch",
+    "test:e2e": "playwright test",
+    "package": "npm run build && node scripts/zip-dist.mjs chrome ferry-chrome.zip && node scripts/zip-dist.mjs firefox ferry-firefox.zip",
+    "source": "git archive --format=zip -o ferry-source.zip HEAD"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/chrome": "^0.0.268",
+    "@types/node": "^22.10.0",
+    "@types/webextension-polyfill": "^0.12.5",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0",
+    "yazl": "^3.3.1"
+  },
+  "dependencies": {
+    "webextension-polyfill": "^0.12.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
