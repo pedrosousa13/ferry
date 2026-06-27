@@ -17,7 +17,12 @@ function manifest(target) {
     description: DESCRIPTION,
     permissions: ['declarativeNetRequest', 'storage'],
     host_permissions: ['*://*/*'],
-    action: { default_popup: 'popup.html', default_title: NAME },
+    icons: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png', 48: 'icons/icon-48.png', 128: 'icons/icon-128.png' },
+    action: {
+      default_popup: 'popup.html',
+      default_title: NAME,
+      default_icon: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png', 48: 'icons/icon-48.png' },
+    },
     options_ui: { page: 'options.html', open_in_tab: true },
   };
   if (target === 'chrome') {
@@ -45,6 +50,10 @@ function copyStatic(outdir, target) {
   writeFileSync(join(outdir, 'manifest.json'), JSON.stringify(manifest(target), null, 2));
   copyFileSync('src/options.html', join(outdir, 'options.html'));
   copyFileSync('src/popup.html', join(outdir, 'popup.html'));
+  mkdirSync(join(outdir, 'icons'), { recursive: true });
+  for (const size of [16, 32, 48, 128]) {
+    copyFileSync(join('icons', `icon-${size}.png`), join(outdir, 'icons', `icon-${size}.png`));
+  }
 }
 
 for (const target of targets) {
