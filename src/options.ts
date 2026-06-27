@@ -1,6 +1,6 @@
 import { Rule, createRule, validateRule, ALL_RESOURCE_TYPES, ResourceType } from './rule-model';
 import { getRules, setRules, getDisabled, setDisabled } from './storage';
-import { compile } from './compiler';
+import { compile, lintRule } from './compiler';
 
 let rules: Rule[] = [];
 let masterDisabled = false;
@@ -171,6 +171,15 @@ function ruleCard(rule: Rule, i: number): HTMLElement {
   typePill.textContent = rule.patternType === 'regex' ? 'Regex' : 'Wildcard';
   badges.append(typePill, typeBadges(rule.resourceTypes));
 
+  const warnings = lintRule(rule);
+  if (warnings.length) {
+    const warn = document.createElement('span');
+    warn.className = 'badge warn';
+    warn.textContent = `⚠ ${warnings.length}`;
+    warn.title = warnings.join('\n');
+    badges.append(warn);
+  }
+
   const actions = document.createElement('div');
   actions.className = 'rule-card__actions';
   actions.append(
@@ -253,7 +262,7 @@ function fillForm(rule: Rule) {
 
 function edit(i: number) { fillForm(rules[i]); $('#form').scrollIntoView({ behavior: 'smooth' }); }
 
-function setChip(sel: string, text: string, kind: 'ok' | 'bad') {
+function setChip(sel: string, text: string, kind: 'ok' | 'bad' | 'warn') {
   const el = $(sel);
   el.textContent = text;
   el.className = 'chip show ' + kind;
@@ -266,6 +275,7 @@ function resetForm() {
   ($i('#f-type') as unknown as HTMLSelectElement).value = 'wildcard';
   document.querySelectorAll<HTMLInputElement>('input[name="rtype"]').forEach((el) => (el.checked = el.value === 'main_frame'));
   clearChip('#test-result');
+  clearChip('#form-warnings');
   $('#form-errors').textContent = '';
 }
 
@@ -274,16 +284,20 @@ function save() {
   const errors = validateRule(rule);
   if (errors.length) { $('#form-errors').textContent = errors.join(' '); return; }
   $('#form-errors').textContent = '';
+  const warnings = lintRule(rule);
   const idx = rules.findIndex((r) => r.id === rule.id);
   if (idx >= 0) rules[idx] = rule; else rules.push(rule);
   void persist();
   resetForm();
+  if (warnings.length) setChip('#form-warnings', 'Saved, but: ' + warnings.join(' '), 'warn');
 }
 
 function test() {
   const rule = readForm();
   const errors = validateRule(rule);
-  if (errors.length) { setChip('#test-result', errors.join(' '), 'bad'); return; }
+  if (errors.length) { setChip('#test-result', errors.join(' '), 'bad'); clearChip('#form-warnings'); return; }
+  const warnings = lintRule(rule);
+  if (warnings.length) setChip('#form-warnings', warnings.join(' '), 'warn'); else clearChip('#form-warnings');
   const example = $i('#f-example').value;
   if (!example) { setChip('#test-result', 'Enter an example URL to test.', 'bad'); return; }
   const dnr = compile([rule]).find((r) => r.action.type === 'redirect');
@@ -353,10 +367,19 @@ function askModal(title: string, body: string, choices: Choice[]): Promise<strin
   });
 }
 
-async function importFile(file: File) {
-  let data: any;
-  try { data = JSON.parse(await file.text()); } catch { setImportMsg('Invalid JSON.', true); return; }
-  const incoming: any[] = data.redirects ?? data.rules ?? [];
+function normalizeIncoming(data: any): any[] {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object') {
+    if (Array.isArray(data.redirects)) return data.redirects;
+    if (Array.isArray(data.rules)) return data.rules;
+    if (data.includePattern || data.redirectUrl) return [data];
+  }
+  return [];
+}
+
+async function importData(data: any) {
+  activateTab('tab-settings');
+  const incoming: any[] = normalizeIncoming(data);
 
   let skippedTransform = 0;
   let dupInFile = 0;
@@ -425,9 +448,29 @@ async function importFile(file: File) {
   setImportMsg(parts.join(' '));
 }
 
+async function importFile(file: File) {
+  activateTab('tab-settings');
+  let data: any;
+  try { data = JSON.parse(await file.text()); } catch { setImportMsg('Invalid JSON.', true); return; }
+  await importData(data);
+}
+
+async function importText(text: string) {
+  activateTab('tab-settings');
+  if (!text.trim()) { setImportMsg('Paste some JSON first.', true); return; }
+  let data: any;
+  try { data = JSON.parse(text); } catch { setImportMsg('Invalid JSON.', true); return; }
+  await importData(data);
+}
+
 function onImportInput(ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0];
   if (file) void importFile(file);
+}
+
+function addFromPaste() {
+  const ta = $('#paste-json') as HTMLTextAreaElement;
+  void importText(ta.value).then(() => { ta.value = ''; });
 }
 
 function setupDragDrop() {
@@ -455,13 +498,41 @@ function setupDragDrop() {
   });
 }
 
+function activateTab(id: string) {
+  document.querySelectorAll<HTMLElement>('[role="tab"]').forEach((t) => {
+    const selected = t.id === id;
+    t.setAttribute('aria-selected', String(selected));
+    t.tabIndex = selected ? 0 : -1;
+    const panel = document.getElementById(t.getAttribute('aria-controls') || '');
+    if (panel) panel.hidden = !selected;
+  });
+}
+
+function setupTabs() {
+  const tabs = Array.from(document.querySelectorAll<HTMLElement>('[role="tab"]'));
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => activateTab(t.id));
+    t.addEventListener('keydown', (e) => {
+      let next = -1;
+      if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
+      if (e.key === 'ArrowLeft') next = (i - 1 + tabs.length) % tabs.length;
+      if (next < 0) return;
+      e.preventDefault();
+      activateTab(tabs[next].id);
+      tabs[next].focus();
+    });
+  });
+}
+
 function init() {
   renderResourceTypes();
+  setupTabs();
   $('#save').addEventListener('click', save);
   $('#test').addEventListener('click', test);
   $('#reset').addEventListener('click', resetForm);
   $('#export').addEventListener('click', exportRules);
   $i('#import').addEventListener('change', onImportInput);
+  $('#paste-add').addEventListener('click', addFromPaste);
   $i('#master-toggle').addEventListener('change', async () => {
     masterDisabled = !$i('#master-toggle').checked;
     await setDisabled(masterDisabled);

@@ -10,8 +10,10 @@ import rule JSON by dragging the file into the window.
 
 ## Constraints
 
-- Presentation only. No change to `rule-model.ts`, `storage.ts`, `compiler.ts`, or
-  `engine.ts`. Stored rule values remain the raw resource-type enum strings.
+- Mostly presentation. The only logic addition is a pure, tested `lintRule` in
+  `compiler.ts` (warnings only — it never blocks or mutates). No change to
+  `rule-model.ts`, `storage.ts`, `engine.ts`, or `compile()`. Stored rule values
+  remain the raw resource-type enum strings.
 - Keep the page self-contained: one `src/options.html` with inline CSS, bundled
   `options.ts` → `options.js`. The build (`scripts/build.mjs`) only copies the HTML.
 - No CSS framework, no new runtime dependencies.
@@ -80,6 +82,33 @@ control toggles all checkboxes. Default checked stays `main_frame` only.
   engine already use. Turning it off pauses every rule without deleting anything; the
   rules list shows a paused state. No engine change — `engine.ts` already re-syncs on
   the `disabled` storage change.
+
+### 5. Tabbed layout
+
+- The page is split into two tabs: **Rules** (master switch, rules list, add/edit
+  form) and **Settings** (Backup import/export, Add from JSON). Default tab is Rules.
+- Accessible: `role="tablist"/"tab"/"tabpanel"`, `aria-selected`, roving `tabindex`,
+  Left/Right arrow-key navigation.
+- Drag-and-drop import stays global; a successful import (or any import message)
+  switches to the Settings tab so the result is visible.
+
+### 6. Rule linting
+
+- A pure `lintRule(rule): string[]` in `compiler.ts` returns non-blocking warnings for
+  rules that compile to valid DNR but are likely broken:
+  - Redirect references a `$n` capture group the match pattern doesn't have (wildcard
+    `*` count, or regex capturing-group count, ignoring `(?:…)`).
+  - Redirect target matches the rule's own pattern → likely redirect loop.
+- Surfaced two ways: an amber warning chip in the form on **Test**/**Save** (save still
+  proceeds — warnings never block), and a `⚠ N` badge (with the messages as a tooltip)
+  on any rule card in the list. Distinct from the existing red blocking errors.
+
+### 7. Add rule from pasted JSON
+
+- A textarea + "Add from JSON" button in the Settings tab. Accepts a single rule
+  object, an array of rules, or an exported `{ redirects: [...] }` file.
+- Routes through the same `importData` path as file/drop import (normalised by
+  `normalizeIncoming`), so it shares the Replace/Append prompt and dedupe.
 
 ## Out of scope
 

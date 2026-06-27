@@ -20,6 +20,8 @@
       --success-soft: #e4f5ea;
       --danger: #c0392b;
       --danger-soft: #fbe9e7;
+      --warn: #8a6100;
+      --warn-soft: #fdf3d7;
       --badge-bg: #eef1f4;
       --badge-fg: #44505c;
       --shadow: 0 1px 2px rgba(16,24,32,.06), 0 2px 8px rgba(16,24,32,.05);
@@ -42,6 +44,8 @@
         --success-soft: #16301f;
         --danger: #f08a7f;
         --danger-soft: #3a1f1c;
+        --warn: #e8c66b;
+        --warn-soft: #352c12;
         --badge-bg: #2a3138;
         --badge-fg: #b9c2cc;
         --shadow: 0 1px 2px rgba(0,0,0,.3), 0 2px 10px rgba(0,0,0,.25);
@@ -75,6 +79,18 @@
       font-size: .8rem; text-transform: uppercase; letter-spacing: .06em;
       color: var(--muted); margin: 0 0 .9rem; font-weight: 600;
     }
+
+    /* ---- tabs ---- */
+    .tabs { display: flex; gap: .2rem; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+    .tab {
+      background: none; border: none; font: inherit; font-weight: 600;
+      color: var(--muted); cursor: pointer; padding: .6rem .95rem;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .tab:hover { color: var(--text); }
+    .tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    [role="tabpanel"][hidden] { display: none; }
 
     /* ---- control bar (master switch) ---- */
     .control-bar {
@@ -128,6 +144,7 @@
       white-space: nowrap;
     }
     .badge.type-pill { background: var(--accent-soft); color: var(--accent); }
+    .badge.warn { background: var(--warn-soft); color: var(--warn); cursor: help; }
 
     /* toggle switch */
     .switch { grid-area: toggle; position: relative; display: inline-flex; align-items: center; cursor: pointer; }
@@ -168,13 +185,17 @@
     .field { margin: 0 0 .9rem; }
     .field > label { display: block; font-weight: 600; font-size: .9rem; margin-bottom: .3rem; }
     .field .hint { font-weight: 400; color: var(--muted); font-size: .82rem; }
-    input[type=text], select {
+    input[type=text], select, textarea {
       width: 100%; font: inherit; color: var(--text);
       background: var(--surface); border: 1px solid var(--border-strong);
       border-radius: var(--radius-sm); padding: .5rem .6rem;
     }
-    input[type=text]::placeholder { color: var(--muted); opacity: .7; }
-    input[type=text]:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+    textarea {
+      resize: vertical; min-height: 5.5rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem;
+    }
+    input[type=text]::placeholder, textarea::placeholder { color: var(--muted); opacity: .7; }
+    input[type=text]:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
     @media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } }
 
@@ -229,6 +250,7 @@
     .chip.show { display: block; }
     .chip.ok { background: var(--success-soft); color: var(--success); }
     .chip.bad { background: var(--danger-soft); color: var(--danger); }
+    .chip.warn { background: var(--warn-soft); color: var(--warn); font-family: inherit; }
     #form-errors { color: var(--danger); font-size: .85rem; margin-top: .3rem; min-height: 0; }
     #import-msg { color: var(--success); font-size: .85rem; margin-top: .5rem; }
     #import-msg.bad { color: var(--danger); }
@@ -283,6 +305,12 @@
       <p>Redirect requests with declarativeNetRequest rules.</p>
     </header>
 
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab" role="tab" id="tab-rules" aria-controls="panel-rules" aria-selected="true">Rules</button>
+      <button class="tab" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false" tabindex="-1">Settings</button>
+    </nav>
+
+    <section id="panel-rules" role="tabpanel" aria-labelledby="tab-rules">
     <div class="control-bar" id="control-bar">
       <div>
         <div class="state" id="control-state">Ferry is on</div>
@@ -340,6 +368,7 @@
       </div>
 
       <div id="test-result" class="chip"></div>
+      <div id="form-warnings" class="chip"></div>
       <div id="form-errors"></div>
 
       <div class="form-actions">
@@ -348,7 +377,9 @@
         <button id="reset" class="btn">Clear form</button>
       </div>
     </section>
+    </section>
 
+    <section id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
     <section class="card">
       <h2>Backup</h2>
       <div class="form-actions" style="margin-bottom:.9rem">
@@ -360,6 +391,18 @@
         <input type="file" id="import" accept="application/json">
       </label>
       <div id="import-msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>Add from JSON</h2>
+      <div class="field">
+        <label for="paste-json">Paste rule JSON <span class="hint">— a single rule, an array, or an exported file</span></label>
+        <textarea id="paste-json" rows="6" placeholder='{ "includePattern": "https://twitter.com/*", "redirectUrl": "https://nitter.net/$1" }'></textarea>
+      </div>
+      <div class="form-actions">
+        <button id="paste-add" class="btn btn-primary">Add from JSON</button>
+      </div>
+    </section>
     </section>
   </div>
 
