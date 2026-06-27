@@ -316,7 +316,7 @@ function test() {
 }
 
 function exportRules() {
-  const blob = new Blob([JSON.stringify({ createdBy: 'Ferry', redirects: rules }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ createdBy: 'Ferry', redirects: rules, whitelist }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'ferry-rules.json';
@@ -405,20 +405,29 @@ async function importData(data: any) {
     candidates.push(rule);
   }
 
+  const wlCandidates: WhitelistEntry[] = Array.isArray(data?.whitelist)
+    ? (data.whitelist as any[])
+        .map((w) => createWhitelistEntry({ pattern: typeof w === 'string' ? w : w?.pattern, disabled: w?.disabled }))
+        .filter((w) => w.pattern)
+    : [];
+
   const transformNote = skippedTransform
     ? ` Skipped ${skippedTransform} rule(s) that need transforms (base64 / URL decode), which Ferry can't perform.`
     : '';
 
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && wlCandidates.length === 0) {
     setImportMsg('No importable rules found in this file.' + transformNote, true);
     return;
   }
 
   let mode: 'replace' | 'append' = 'replace';
-  if (rules.length > 0) {
+  if (rules.length > 0 || whitelist.length > 0) {
+    const wlNote = wlCandidates.length
+      ? ` and ${wlCandidates.length} whitelist entr${wlCandidates.length === 1 ? 'y' : 'ies'}`
+      : '';
     const choice = await askModal(
-      'Import rules',
-      `Found ${candidates.length} rule(s) in this file. Append them to your ${rules.length} current rule(s), or replace everything?`,
+      'Import',
+      `Found ${candidates.length} rule(s)${wlNote}. Append to what you already have, or replace everything?`,
       [
         { label: 'Append', value: 'append', primary: true },
         { label: 'Replace', value: 'replace' },
@@ -430,20 +439,35 @@ async function importData(data: any) {
   }
 
   let dupExisting = 0;
-  if (mode === 'replace') {
-    rules = candidates;
-  } else {
-    const existing = new Set(rules.map(ruleSignature));
-    for (const c of candidates) {
-      if (existing.has(ruleSignature(c))) { dupExisting++; continue; }
-      rules.push(c);
+  if (candidates.length) {
+    if (mode === 'replace') {
+      rules = candidates;
+    } else {
+      const existing = new Set(rules.map(ruleSignature));
+      for (const c of candidates) {
+        if (existing.has(ruleSignature(c))) { dupExisting++; continue; }
+        rules.push(c);
+      }
     }
+    await persist();
   }
-  await persist();
+
+  if (wlCandidates.length) {
+    if (mode === 'replace') {
+      whitelist = wlCandidates;
+    } else {
+      const have = new Set(whitelist.map((w) => w.pattern));
+      for (const w of wlCandidates) if (!have.has(w.pattern)) whitelist.push(w);
+    }
+    await persistWhitelist();
+  }
 
   const importedCount = candidates.length - dupExisting;
   const dupTotal = dupInFile + dupExisting;
-  const parts = [`Imported ${importedCount} rule(s)${mode === 'replace' ? ' (replaced all)' : ''}.`];
+  const wlDone = wlCandidates.length
+    ? ` and ${wlCandidates.length} whitelist entr${wlCandidates.length === 1 ? 'y' : 'ies'}`
+    : '';
+  const parts = [`Imported ${importedCount} rule(s)${wlDone}${mode === 'replace' ? ' (replaced all)' : ''}.`];
   if (dupTotal) parts.push(`Skipped ${dupTotal} duplicate(s).`);
   if (skippedTransform) parts.push(transformNote.trim());
   setImportMsg(parts.join(' '));
