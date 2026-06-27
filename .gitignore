@@ -4,3 +4,5 @@ dist/
 *.log
 *.zip
 .superpowers/
+test-results/
+playwright-report/
