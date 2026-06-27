@@ -23,7 +23,7 @@ function manifest(target) {
   return {
     ...base,
     background: { scripts: ['engine.js'] },
-    browser_specific_settings: { gecko: { id: 'ferry@ferry.app', strict_min_version: '128.0' } },
+    browser_specific_settings: { gecko: { id: 'ferry@pedrosousa.me', strict_min_version: '128.0' } },
   };
 }
 
