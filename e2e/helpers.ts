@@ -52,12 +52,13 @@ export async function serveText(bodies: Record<string, string>): Promise<Fixture
   return { port, url: (p) => `http://127.0.0.1:${port}${p}`, close: () => server.close() };
 }
 
-// Write rules into the extension's storage; the engine's storage.onChanged
-// listener recompiles and pushes them into declarativeNetRequest.
-export async function seedRules(worker: Worker, rules: unknown[]): Promise<void> {
-  await worker.evaluate(async (r) => {
-    await chrome.storage.local.set({ rules: r, disabled: false });
-  }, rules);
+// Write rules (and optionally a whitelist) into the extension's storage; the
+// engine's storage.onChanged listener recompiles and pushes the result into
+// declarativeNetRequest.
+export async function seedRules(worker: Worker, rules: unknown[], whitelist: unknown[] = []): Promise<void> {
+  await worker.evaluate(async ({ r, w }) => {
+    await chrome.storage.local.set({ rules: r, disabled: false, whitelist: w });
+  }, { r: rules, w: whitelist });
 }
 
 // Poll the live DNR rule set until it reaches the expected count (or time out).

@@ -73,3 +73,31 @@ test('exclude pattern prevents redirect while siblings still redirect', async ()
     await context.close();
   }
 });
+
+test('whitelist entry prevents redirect while other URLs still redirect', async () => {
+  const context = await launchWithExtension();
+  const server = await serveText({ '/page/safe': 'SAFE', '/page/other': 'OTHER', '/dest': 'DEST' });
+  try {
+    const worker = await getServiceWorker(context);
+    await seedRules(
+      worker,
+      [rule({ id: 'r1', includePattern: server.url('/page/*'), redirectUrl: server.url('/dest') })],
+      [{ id: 'w1', pattern: server.url('/page/safe'), disabled: false }],
+    );
+    // one redirect rule + one whitelist allow rule
+    await waitForDynamicRules(worker, 2);
+
+    const safe = await context.newPage();
+    await safe.goto(server.url('/page/safe'));
+    expect(safe.url()).toBe(server.url('/page/safe'));
+    await expect(safe.locator('body')).toHaveText('SAFE');
+
+    const other = await context.newPage();
+    await other.goto(server.url('/page/other'));
+    expect(other.url()).toBe(server.url('/dest'));
+    await expect(other.locator('body')).toHaveText('DEST');
+  } finally {
+    server.close();
+    await context.close();
+  }
+});
