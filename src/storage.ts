@@ -15,3 +15,7 @@ export async function getDisabled(): Promise<boolean> {
 export async function setDisabled(disabled: boolean): Promise<void> {
   await browser.storage.local.set({ disabled });
 }
+export async function getSyncError(): Promise<string | null> {
+  const { syncError } = await browser.storage.local.get({ syncError: null });
+  return syncError as string | null;
+}
