@@ -8,6 +8,7 @@
     h1 { font-size: 1rem; margin: 0 0 .6rem; }
     .row { display: flex; align-items: center; gap: .5rem; margin: .5rem 0; }
     #status { color: #555; }
+    .err { color: #b00; }
   </style>
 </head>
 <body>
@@ -16,6 +17,7 @@
     <label><input type="checkbox" id="toggle"> Enabled</label>
   </div>
   <div id="status"></div>
+  <div id="sync-error" class="err" hidden></div>
   <div class="row"><button id="open-options">Manage rules</button></div>
   <script src="popup.js"></script>
 </body>
