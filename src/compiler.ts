@@ -1,4 +1,5 @@
-import type { Rule, ResourceType } from './rule-model';
+import { ALL_RESOURCE_TYPES } from './rule-model';
+import type { Rule, ResourceType, WhitelistEntry } from './rule-model';
 
 export interface DnrRule {
   id: number;
@@ -79,7 +80,7 @@ export function lintRule(rule: Rule): string[] {
   return warnings;
 }
 
-export function compile(rules: Rule[]): DnrRule[] {
+export function compile(rules: Rule[], whitelist: WhitelistEntry[] = []): DnrRule[] {
   const enabled = rules.filter((r) => !r.disabled);
   const n = enabled.length;
   const out: DnrRule[] = [];
@@ -100,5 +101,15 @@ export function compile(rules: Rule[]): DnrRule[] {
       });
     }
   });
+  whitelist
+    .filter((entry) => !entry.disabled)
+    .forEach((entry, j) => {
+      out.push({
+        id: 2 * n + 1 + j,
+        priority: 2 * n + 1, // strictly above every redirect (≤n) and exclude (≤2n)
+        action: { type: 'allow' },
+        condition: { regexFilter: wildcardToRegex(entry.pattern), resourceTypes: ALL_RESOURCE_TYPES },
+      });
+    });
   return out;
 }

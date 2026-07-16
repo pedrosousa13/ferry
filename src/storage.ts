@@ -1,5 +1,5 @@
 import browser from 'webextension-polyfill';
-import type { Rule } from './rule-model';
+import type { Rule, WhitelistEntry } from './rule-model';
 
 export async function getRules(): Promise<Rule[]> {
   const { rules } = await browser.storage.local.get({ rules: [] });
@@ -14,6 +14,13 @@ export async function getDisabled(): Promise<boolean> {
 }
 export async function setDisabled(disabled: boolean): Promise<void> {
   await browser.storage.local.set({ disabled });
+}
+export async function getWhitelist(): Promise<WhitelistEntry[]> {
+  const { whitelist } = await browser.storage.local.get({ whitelist: [] });
+  return whitelist as WhitelistEntry[];
+}
+export async function setWhitelist(whitelist: WhitelistEntry[]): Promise<void> {
+  await browser.storage.local.set({ whitelist });
 }
 export async function getSyncError(): Promise<string | null> {
   const { syncError } = await browser.storage.local.get({ syncError: null });

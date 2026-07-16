@@ -108,3 +108,23 @@ export function validateRule(rule: Rule): string[] {
   }
   return errors;
 }
+
+export interface WhitelistEntry {
+  id: string;
+  pattern: string;
+  disabled: boolean;
+}
+
+export function createWhitelistEntry(partial: Partial<WhitelistEntry>): WhitelistEntry {
+  return {
+    id: partial.id ?? (globalThis.crypto?.randomUUID?.() ?? String(Date.now())),
+    pattern: partial.pattern ?? '',
+    disabled: partial.disabled ?? false,
+  };
+}
+
+export function validateWhitelistEntry(entry: WhitelistEntry): string[] {
+  const errors: string[] = [];
+  if (!entry.pattern) errors.push('Pattern is required.');
+  return errors;
+}

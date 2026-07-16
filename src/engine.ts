@@ -1,16 +1,32 @@
 import browser from 'webextension-polyfill';
 import { compile } from './compiler';
-import type { Rule } from './rule-model';
+import type { Rule, WhitelistEntry } from './rule-model';
 
 // webextension-polyfill's types don't fully cover declarativeNetRequest; cast narrowly.
 const dnr = (browser as any).declarativeNetRequest;
 
+// compile() lays out ids as: redirect/exclude rules take 1..2n (two ids per
+// source rule, n = enabled.length), then whitelist allow rules take
+// 2n+1.. (one id per enabled whitelist entry). Map a compiled rule's id back
+// to the human-readable source it came from, without misattributing
+// whitelist-derived ids to redirect rules.
+function attributedName(id: number, n: number, enabled: Rule[], enabledWhitelist: WhitelistEntry[]): string | undefined {
+  if (id <= 2 * n) {
+    const source = enabled[Math.floor((id - 1) / 2)];
+    return source ? source.description || source.includePattern : undefined;
+  }
+  const entry = enabledWhitelist[id - (2 * n + 1)];
+  return entry ? `whitelist: ${entry.pattern}` : undefined;
+}
+
 export async function syncRules(): Promise<void> {
-  const data = await browser.storage.local.get({ rules: [], disabled: false });
+  const data = await browser.storage.local.get({ rules: [], disabled: false, whitelist: [] });
   const rules = data.rules as Rule[];
   const disabled = data.disabled as boolean;
+  const whitelist = data.whitelist as WhitelistEntry[];
   const enabled = rules.filter((r) => !r.disabled);
-  const desired = disabled ? [] : compile(rules);
+  const enabledWhitelist = whitelist.filter((w) => !w.disabled);
+  const desired = disabled ? [] : compile(rules, whitelist);
   const existing = await dnr.getDynamicRules();
   const removeRuleIds = existing.map((r: { id: number }) => r.id);
   try {
@@ -20,16 +36,16 @@ export async function syncRules(): Promise<void> {
     // updateDynamicRules is atomic: one bad rule fails the whole batch. Retry
     // rule-by-rule so the good rules still load, and record what was rejected.
     await dnr.updateDynamicRules({ removeRuleIds, addRules: [] });
-    const failed: Rule[] = [];
+    const failed: string[] = [];
     for (const d of desired) {
       try {
         await dnr.updateDynamicRules({ addRules: [d] });
       } catch {
-        const source = enabled[Math.floor((d.id - 1) / 2)];
-        if (source && !failed.includes(source)) failed.push(source);
+        const name = attributedName(d.id, enabled.length, enabled, enabledWhitelist);
+        if (name && !failed.includes(name)) failed.push(name);
       }
     }
-    const names = failed.map((r) => r.description || r.includePattern).join(', ');
+    const names = failed.join(', ');
     await browser.storage.local.set({
       syncError: failed.length
         ? `The browser rejected ${failed.length} rule(s): ${names}. The remaining rules are active.`
@@ -49,5 +65,5 @@ export function scheduleSync(): Promise<void> {
 browser.runtime.onInstalled.addListener(() => { void scheduleSync(); });
 browser.runtime.onStartup.addListener(() => { void scheduleSync(); });
 browser.storage.onChanged.addListener((changes: any, area: string) => {
-  if (area === 'local' && (changes.rules || changes.disabled)) void scheduleSync();
+  if (area === 'local' && (changes.rules || changes.disabled || changes.whitelist)) void scheduleSync();
 });

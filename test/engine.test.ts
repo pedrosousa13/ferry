@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const state = { rules: [] as any[], disabled: false };
+const state = { rules: [] as any[], disabled: false, whitelist: [] as any[] };
 const { updateDynamicRules, getDynamicRules, storageSet } = vi.hoisted(() => ({
   updateDynamicRules: vi.fn(async (_arg?: any) => {}),
   getDynamicRules: vi.fn(async () => [{ id: 99 }]),
@@ -19,7 +19,7 @@ vi.mock('webextension-polyfill', () => ({
 }));
 
 import { syncRules, scheduleSync } from '../src/engine';
-import { createRule } from '../src/rule-model';
+import { createRule, createWhitelistEntry } from '../src/rule-model';
 
 beforeEach(() => {
   updateDynamicRules.mockClear();
@@ -27,6 +27,7 @@ beforeEach(() => {
   updateDynamicRules.mockImplementation(async () => {});
   state.disabled = false;
   state.rules = [];
+  state.whitelist = [];
 });
 
 describe('syncRules', () => {
@@ -47,6 +48,15 @@ describe('syncRules', () => {
     const arg = (updateDynamicRules.mock.calls as any)[0][0];
     expect(arg.removeRuleIds).toEqual([99]);
     expect(arg.addRules).toEqual([]);
+  });
+
+  it('adds a whitelist allow rule alongside redirects', async () => {
+    state.rules = [createRule({ id: 'a', includePattern: 'https://x/*', redirectUrl: 'https://y/$1' })];
+    state.whitelist = [createWhitelistEntry({ id: 'w', pattern: 'https://x/safe/*' })];
+    await syncRules();
+    const arg = (updateDynamicRules.mock.calls as any)[0][0];
+    expect(arg.addRules).toHaveLength(2);
+    expect(arg.addRules.some((r: any) => r.action.type === 'allow')).toBe(true);
   });
 });
 
@@ -74,6 +84,24 @@ describe('syncRules error isolation', () => {
     const errCall = storageSet.mock.calls.find((c: any[]) => typeof c[0].syncError === 'string');
     expect(errCall).toBeTruthy();
     expect((errCall as any)[0].syncError).toContain('bad rule');
+  });
+
+  it('attributes a failing whitelist-derived rule to the whitelist entry, not a redirect rule', async () => {
+    state.rules = [
+      createRule({ id: 'good', description: 'good redirect', includePattern: 'https://x/*', redirectUrl: 'https://y/$1' }),
+    ];
+    state.whitelist = [createWhitelistEntry({ id: 'w', pattern: 'https://blocked/*' })];
+    updateDynamicRules.mockImplementation(async (arg: any) => {
+      // Reject only the whitelist allow rule.
+      if (arg.addRules?.some((r: any) => r.action.type === 'allow')) {
+        throw new Error('Rule with id 3 is invalid');
+      }
+    });
+    await syncRules();
+    const errCall = storageSet.mock.calls.find((c: any[]) => typeof c[0].syncError === 'string');
+    expect(errCall).toBeTruthy();
+    expect((errCall as any)[0].syncError).toContain('whitelist: https://blocked/*');
+    expect((errCall as any)[0].syncError).not.toContain('good redirect');
   });
 
   it('clears syncError when the batch fails transiently but every per-rule add succeeds', async () => {

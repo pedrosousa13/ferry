@@ -1,11 +1,12 @@
 import browser from 'webextension-polyfill';
-import { Rule, createRule, validateRule, ALL_RESOURCE_TYPES, ResourceType } from './rule-model';
-import { getRules, setRules, getDisabled, setDisabled, getSyncError } from './storage';
+import { Rule, createRule, validateRule, ALL_RESOURCE_TYPES, ResourceType, WhitelistEntry, createWhitelistEntry, validateWhitelistEntry } from './rule-model';
+import { getRules, setRules, getDisabled, setDisabled, getWhitelist, setWhitelist, getSyncError } from './storage';
 import { compile, lintRule } from './compiler';
 import { parseImport } from './import';
 
 let rules: Rule[] = [];
 let masterDisabled = false;
+let whitelist: WhitelistEntry[] = [];
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const $i = (sel: string) => document.querySelector(sel) as HTMLInputElement;
 
@@ -317,7 +318,7 @@ function test() {
 }
 
 function exportRules() {
-  const blob = new Blob([JSON.stringify({ createdBy: 'Ferry', redirects: rules }, null, 2)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ createdBy: 'Ferry', redirects: rules, whitelist }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'ferry-rules.json';
@@ -397,6 +398,12 @@ async function importData(data: any) {
     candidates.push(rule);
   }
 
+  const wlCandidates: WhitelistEntry[] = Array.isArray(data?.whitelist)
+    ? (data.whitelist as any[])
+        .map((w) => createWhitelistEntry({ pattern: typeof w === 'string' ? w : w?.pattern, disabled: w?.disabled }))
+        .filter((w) => w.pattern)
+    : [];
+
   const transformNote = skippedTransform
     ? ` Skipped ${skippedTransform} rule(s) that need transforms (base64 / URL decode), which Ferry can't perform.`
     : '';
@@ -404,16 +411,19 @@ async function importData(data: any) {
     ? ` Skipped ${result.skippedInvalid} invalid rule(s).`
     : '';
 
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && wlCandidates.length === 0) {
     setImportMsg('No importable rules found in this file.' + transformNote + invalidNote, true);
     return;
   }
 
   let mode: 'replace' | 'append' = 'replace';
-  if (rules.length > 0) {
+  if (rules.length > 0 || whitelist.length > 0) {
+    const wlNote = wlCandidates.length
+      ? ` and ${wlCandidates.length} whitelist entr${wlCandidates.length === 1 ? 'y' : 'ies'}`
+      : '';
     const choice = await askModal(
-      'Import rules',
-      `Found ${candidates.length} rule(s) in this file. Append them to your ${rules.length} current rule(s), or replace everything?`,
+      'Import',
+      `Found ${candidates.length} rule(s)${wlNote}. Append to what you already have, or replace everything?`,
       [
         { label: 'Append', value: 'append', primary: true },
         { label: 'Replace', value: 'replace' },
@@ -425,20 +435,35 @@ async function importData(data: any) {
   }
 
   let dupExisting = 0;
-  if (mode === 'replace') {
-    rules = candidates;
-  } else {
-    const existing = new Set(rules.map(ruleSignature));
-    for (const c of candidates) {
-      if (existing.has(ruleSignature(c))) { dupExisting++; continue; }
-      rules.push(c);
+  if (candidates.length) {
+    if (mode === 'replace') {
+      rules = candidates;
+    } else {
+      const existing = new Set(rules.map(ruleSignature));
+      for (const c of candidates) {
+        if (existing.has(ruleSignature(c))) { dupExisting++; continue; }
+        rules.push(c);
+      }
     }
+    await persist();
   }
-  await persist();
+
+  if (wlCandidates.length) {
+    if (mode === 'replace') {
+      whitelist = wlCandidates;
+    } else {
+      const have = new Set(whitelist.map((w) => w.pattern));
+      for (const w of wlCandidates) if (!have.has(w.pattern)) whitelist.push(w);
+    }
+    await persistWhitelist();
+  }
 
   const importedCount = candidates.length - dupExisting;
   const dupTotal = dupInFile + dupExisting;
-  const parts = [`Imported ${importedCount} rule(s)${mode === 'replace' ? ' (replaced all)' : ''}.`];
+  const wlDone = wlCandidates.length
+    ? ` and ${wlCandidates.length} whitelist entr${wlCandidates.length === 1 ? 'y' : 'ies'}`
+    : '';
+  const parts = [`Imported ${importedCount} rule(s)${wlDone}${mode === 'replace' ? ' (replaced all)' : ''}.`];
   if (dupTotal) parts.push(`Skipped ${dupTotal} duplicate(s).`);
   if (skippedTransform) parts.push(transformNote.trim());
   if (result.skippedInvalid) parts.push(invalidNote.trim());
@@ -495,6 +520,60 @@ function setupDragDrop() {
   });
 }
 
+function wlToggle(entry: WhitelistEntry, i: number): HTMLLabelElement {
+  const wrap = document.createElement('label');
+  wrap.className = 'switch';
+  wrap.title = entry.disabled ? 'Disabled — click to enable' : 'Enabled — click to disable';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = !entry.disabled;
+  input.setAttribute('aria-label', entry.disabled ? 'Enable entry' : 'Disable entry');
+  input.addEventListener('change', () => wlToggleAt(i));
+  const track = document.createElement('span');
+  track.className = 'track';
+  wrap.append(input, track);
+  return wrap;
+}
+
+function wlItem(entry: WhitelistEntry, i: number): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'wl-item' + (entry.disabled ? ' disabled' : '');
+  const pattern = document.createElement('span');
+  pattern.className = 'pattern';
+  pattern.textContent = entry.pattern;
+  row.append(pattern, wlToggle(entry, i), iconButton('delete', 'Delete', () => wlDel(i), { danger: true }));
+  return row;
+}
+
+function renderWhitelist() {
+  const list = $('#whitelist');
+  list.innerHTML = '';
+  if (whitelist.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.innerHTML = '<strong>No whitelist entries</strong>Add a URL pattern above to protect it from all redirects.';
+    list.appendChild(empty);
+    return;
+  }
+  whitelist.forEach((entry, i) => list.appendChild(wlItem(entry, i)));
+}
+
+async function persistWhitelist() { await setWhitelist(whitelist); renderWhitelist(); }
+function wlToggleAt(i: number) { whitelist[i] = { ...whitelist[i], disabled: !whitelist[i].disabled }; void persistWhitelist(); }
+function wlDel(i: number) { whitelist.splice(i, 1); void persistWhitelist(); }
+
+function wlAdd() {
+  const input = $i('#wl-input');
+  const entry = createWhitelistEntry({ pattern: input.value.trim() });
+  const errors = validateWhitelistEntry(entry);
+  const err = $('#wl-error');
+  if (errors.length) { err.textContent = errors.join(' '); return; }
+  err.textContent = '';
+  whitelist.push(entry);
+  input.value = '';
+  void persistWhitelist();
+}
+
 function activateTab(id: string) {
   document.querySelectorAll<HTMLElement>('[role="tab"]').forEach((t) => {
     const selected = t.id === id;
@@ -537,16 +616,20 @@ function init() {
   $('#export').addEventListener('click', exportRules);
   $i('#import').addEventListener('change', onImportInput);
   $('#paste-add').addEventListener('click', addFromPaste);
+  $('#wl-add').addEventListener('click', wlAdd);
+  $i('#wl-input').addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') wlAdd(); });
   $i('#master-toggle').addEventListener('change', async () => {
     masterDisabled = !$i('#master-toggle').checked;
     await setDisabled(masterDisabled);
     render();
   });
   setupDragDrop();
-  void Promise.all([getRules(), getDisabled()]).then(([r, d]) => {
+  void Promise.all([getRules(), getDisabled(), getWhitelist()]).then(([r, d, w]) => {
     rules = r;
     masterDisabled = d;
+    whitelist = w;
     render();
+    renderWhitelist();
   });
   void renderSyncError();
   browser.storage.onChanged.addListener((changes: any, area: string) => {
