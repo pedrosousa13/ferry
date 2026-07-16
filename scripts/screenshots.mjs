@@ -31,7 +31,7 @@ const extensionId = new URL(worker.url()).host;
 const options = await context.newPage();
 await options.setViewportSize({ width: 1280, height: 800 });
 await options.goto(`chrome-extension://${extensionId}/options.html`);
-await options.waitForSelector('.rule');
+await options.waitForSelector('.rule-card');
 await options.screenshot({ path: join(outDir, '1-options.png') });
 
 const popup = await context.newPage();
