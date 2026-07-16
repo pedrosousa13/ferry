@@ -1,53 +1,430 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Ferry Options</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ferry — redirect rules</title>
   <style>
-    body { font: 14px system-ui, sans-serif; max-width: 820px; margin: 2rem auto; padding: 0 1rem; }
-    h1 { font-size: 1.3rem; }
-    .rule { display: flex; gap: .5rem; align-items: center; padding: .4rem 0; border-bottom: 1px solid #eee; }
-    .rule.disabled { opacity: .5; }
-    .rule .desc { font-weight: 600; min-width: 8rem; }
-    .rule code { flex: 1; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    button { cursor: pointer; }
-    fieldset { margin: 1rem 0; }
-    label { display: block; margin: .35rem 0; }
-    input[type=text] { width: 100%; box-sizing: border-box; }
-    .rtypes label { display: inline-block; margin-right: .8rem; }
-    .msg { color: #060; } .err { color: #b00; }
+    :root {
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --surface-2: #f0f3f6;
+      --border: #e2e6ea;
+      --border-strong: #cdd4db;
+      --text: #1b1f24;
+      --muted: #5c6670;
+      --accent: #0d7d8a;
+      --accent-fg: #ffffff;
+      --accent-soft: #e2f3f5;
+      --success: #0a7d3c;
+      --success-soft: #e4f5ea;
+      --danger: #c0392b;
+      --danger-soft: #fbe9e7;
+      --warn: #8a6100;
+      --warn-soft: #fdf3d7;
+      --badge-bg: #eef1f4;
+      --badge-fg: #44505c;
+      --shadow: 0 1px 2px rgba(16,24,32,.06), 0 2px 8px rgba(16,24,32,.05);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14171a;
+        --surface: #1d2126;
+        --surface-2: #23282e;
+        --border: #2e353c;
+        --border-strong: #3a424a;
+        --text: #e7eaee;
+        --muted: #9aa4b0;
+        --accent: #2bb7c7;
+        --accent-fg: #07252a;
+        --accent-soft: #14323a;
+        --success: #4cc77f;
+        --success-soft: #16301f;
+        --danger: #f08a7f;
+        --danger-soft: #3a1f1c;
+        --warn: #e8c66b;
+        --warn-soft: #352c12;
+        --badge-bg: #2a3138;
+        --badge-fg: #b9c2cc;
+        --shadow: 0 1px 2px rgba(0,0,0,.3), 0 2px 10px rgba(0,0,0,.25);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      margin: 0;
+      padding: 2.2rem 1rem 4rem;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; }
+
+    header.app { margin-bottom: 1.6rem; display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
+    header.app .logo { width: 36px; height: 36px; border-radius: 9px; flex: none; }
+    header.app h1 { font-size: 1.4rem; margin: 0; letter-spacing: -.01em; }
+    header.app p { margin: 0; color: var(--muted); font-size: .92rem; flex-basis: 100%; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.1rem 1.2rem;
+      margin: 0 0 1.4rem;
+    }
+    .card > h2 {
+      font-size: .8rem; text-transform: uppercase; letter-spacing: .06em;
+      color: var(--muted); margin: 0 0 .9rem; font-weight: 600;
+    }
+
+    /* ---- tabs ---- */
+    .tabs { display: flex; gap: .2rem; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+    .tab {
+      background: none; border: none; font: inherit; font-weight: 600;
+      color: var(--muted); cursor: pointer; padding: .6rem .95rem;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .tab:hover { color: var(--text); }
+    .tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    [role="tabpanel"][hidden] { display: none; }
+
+    /* ---- control bar (master switch) ---- */
+    .control-bar {
+      display: flex; align-items: center; gap: .8rem;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: .8rem 1.1rem; margin-bottom: 1.4rem;
+    }
+    .control-bar.off { border-color: var(--danger); background: var(--danger-soft); }
+    .control-bar .state { font-weight: 600; }
+    .control-bar .sub { color: var(--muted); font-size: .85rem; }
+    .control-bar.off .sub { color: var(--danger); }
+    .control-bar .spacer { flex: 1; }
+
+    /* ---- rules list ---- */
+    #rules { display: flex; flex-direction: column; gap: .7rem; margin-bottom: 1.6rem; }
+    #rules.paused { opacity: .5; filter: grayscale(.4); }
+    .rule-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: .85rem 1rem;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-areas: "main toggle" "flow flow" "badges actions";
+      gap: .55rem .8rem;
+      align-items: center;
+      transition: border-color .15s, opacity .15s;
+    }
+    .rule-card:hover { border-color: var(--border-strong); }
+    .rule-card.disabled { opacity: .55; }
+    .rule-card__title { grid-area: main; font-weight: 600; font-size: 1rem; min-width: 0; }
+    .rule-card__title .unnamed { color: var(--muted); font-weight: 500; font-style: italic; }
+    .rule-card__flow {
+      grid-area: flow;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .82rem; color: var(--muted);
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: .4rem .55rem;
+      overflow-x: auto; white-space: nowrap;
+    }
+    .rule-card__flow .arrow { color: var(--accent); padding: 0 .35rem; }
+    .rule-card__badges { grid-area: badges; display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
+    .rule-card__actions { grid-area: actions; display: flex; gap: .2rem; justify-self: end; }
+
+    .badge {
+      font-size: .72rem; font-weight: 600;
+      padding: .15rem .5rem; border-radius: 999px;
+      background: var(--badge-bg); color: var(--badge-fg);
+      white-space: nowrap;
+    }
+    .badge.type-pill { background: var(--accent-soft); color: var(--accent); }
+    .badge.warn { background: var(--warn-soft); color: var(--warn); cursor: help; }
+
+    /* toggle switch */
+    .switch { grid-area: toggle; position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+    .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .switch .track {
+      width: 38px; height: 22px; border-radius: 999px;
+      background: var(--border-strong); transition: background .15s; flex: none;
+    }
+    .switch .track::after {
+      content: ""; position: absolute; top: 3px; left: 3px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s;
+    }
+    .switch input:checked + .track { background: var(--accent); }
+    .switch input:checked + .track::after { transform: translateX(16px); }
+    .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .icon-btn {
+      display: inline-grid; place-items: center;
+      width: 30px; height: 30px; padding: 0;
+      border: 1px solid transparent; border-radius: var(--radius-sm);
+      background: transparent; color: var(--muted); cursor: pointer;
+      transition: background .12s, color .12s, border-color .12s;
+    }
+    .icon-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+    .icon-btn.danger:hover { background: var(--danger-soft); color: var(--danger); }
+    .icon-btn:disabled { opacity: .35; cursor: default; }
+    .icon-btn svg { width: 15px; height: 15px; }
+
+    .empty {
+      text-align: center; color: var(--muted);
+      border: 1px dashed var(--border-strong); border-radius: var(--radius);
+      padding: 2rem 1rem; background: var(--surface);
+    }
+    .empty strong { color: var(--text); display: block; margin-bottom: .25rem; }
+
+    /* ---- form ---- */
+    .field { margin: 0 0 .9rem; }
+    .field > label { display: block; font-weight: 600; font-size: .9rem; margin-bottom: .3rem; }
+    .field .hint { font-weight: 400; color: var(--muted); font-size: .82rem; }
+    input[type=text], select, textarea {
+      width: 100%; font: inherit; color: var(--text);
+      background: var(--surface); border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm); padding: .5rem .6rem;
+    }
+    textarea {
+      resize: vertical; min-height: 5.5rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem;
+    }
+    input[type=text]::placeholder, textarea::placeholder { color: var(--muted); opacity: .7; }
+    input[type=text]:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+    @media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    /* resource types */
+    .rtypes__head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; }
+    .rtypes__head .label { font-weight: 600; font-size: .9rem; }
+    .rtypes__tools { display: flex; gap: .8rem; }
+    .linkbtn { background: none; border: none; padding: 0; color: var(--accent); font: inherit; font-size: .82rem; cursor: pointer; }
+    .linkbtn:hover { text-decoration: underline; }
+    .rtype {
+      display: flex; gap: .55rem; align-items: flex-start;
+      padding: .5rem .6rem; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface); margin-bottom: .45rem; cursor: pointer;
+    }
+    .rtype:hover { border-color: var(--border-strong); }
+    .rtype input { margin-top: .15rem; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+    .rtype .rtype__label { font-weight: 600; font-size: .9rem; }
+    .rtype .rtype__hint { display: block; font-weight: 400; color: var(--muted); font-size: .8rem; margin-top: .05rem; }
+    details.rtypes-advanced { margin-top: .2rem; }
+    details.rtypes-advanced > summary {
+      cursor: pointer; color: var(--accent); font-size: .85rem; font-weight: 600;
+      list-style: none; padding: .35rem 0; user-select: none;
+    }
+    details.rtypes-advanced > summary::-webkit-details-marker { display: none; }
+    details.rtypes-advanced > summary::before { content: "▸ "; display: inline-block; transition: transform .15s; }
+    details.rtypes-advanced[open] > summary::before { content: "▾ "; }
+    .rtypes-advanced__grid { margin-top: .5rem; }
+    @media (min-width: 560px) {
+      .rtypes-advanced__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 .6rem; }
+      .rtypes-advanced__grid .rtype { margin-bottom: .5rem; }
+    }
+
+    /* buttons */
+    .btn {
+      font: inherit; font-weight: 600; cursor: pointer;
+      border-radius: var(--radius-sm); padding: .5rem .9rem;
+      border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+      transition: background .12s, border-color .12s;
+    }
+    .btn:hover { background: var(--surface-2); }
+    .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .btn-primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+    .btn-primary:hover { filter: brightness(1.07); background: var(--accent); }
+    .form-actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-top: .3rem; }
+
+    /* feedback chips */
+    .chip {
+      display: none; font-size: .85rem; font-weight: 500;
+      padding: .4rem .6rem; border-radius: var(--radius-sm); margin-top: .2rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .chip.show { display: block; }
+    .chip.ok { background: var(--success-soft); color: var(--success); }
+    .chip.bad { background: var(--danger-soft); color: var(--danger); }
+    .chip.warn { background: var(--warn-soft); color: var(--warn); font-family: inherit; }
+    #form-errors { color: var(--danger); font-size: .85rem; margin-top: .3rem; min-height: 0; }
+    #sync-error {
+      background: var(--danger-soft); color: var(--danger);
+      border: 1px solid var(--danger); border-radius: var(--radius-sm);
+      padding: .7rem .9rem; margin-bottom: 1.4rem; font-size: .9rem; font-weight: 500;
+    }
+    #sync-error[hidden] { display: none; }
+    #import-msg { color: var(--success); font-size: .85rem; margin-top: .5rem; }
+    #import-msg.bad { color: var(--danger); }
+
+    /* dropzone + overlay */
+    .dropzone {
+      display: flex; flex-direction: column; align-items: center; gap: .3rem;
+      border: 1.5px dashed var(--border-strong); border-radius: var(--radius);
+      padding: 1.3rem 1rem; text-align: center; color: var(--muted);
+      background: var(--surface-2); cursor: pointer; transition: border-color .12s, background .12s;
+    }
+    .dropzone:hover { border-color: var(--accent); }
+    .dropzone strong { color: var(--text); }
+    .dropzone .browse { color: var(--accent); font-weight: 600; }
+    .dropzone input[type=file] { display: none; }
+
+    #drop-overlay {
+      position: fixed; inset: 0; z-index: 50;
+      display: none; place-items: center;
+      background: color-mix(in srgb, var(--accent) 16%, transparent);
+      backdrop-filter: blur(2px);
+    }
+    body.drag-active #drop-overlay { display: grid; }
+    #drop-overlay .panel {
+      pointer-events: none;
+      border: 2.5px dashed var(--accent); border-radius: var(--radius);
+      background: var(--surface); color: var(--text);
+      padding: 2rem 2.6rem; font-size: 1.1rem; font-weight: 600;
+      box-shadow: var(--shadow); display: flex; align-items: center; gap: .6rem;
+    }
+
+    /* ---- modal ---- */
+    #modal { position: fixed; inset: 0; z-index: 60; display: none; place-items: center;
+      background: rgba(10,14,18,.45); padding: 1rem; }
+    #modal.show { display: grid; }
+    #modal .dialog {
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      box-shadow: 0 10px 40px rgba(0,0,0,.3); padding: 1.4rem 1.5rem;
+      max-width: 420px; width: 100%;
+    }
+    #modal h3 { margin: 0 0 .5rem; font-size: 1.1rem; }
+    #modal p { margin: 0 0 1.2rem; color: var(--muted); font-size: .92rem; }
+    #modal .actions { display: flex; gap: .6rem; justify-content: flex-end; flex-wrap: wrap; }
   </style>
 </head>
 <body>
-  <h1>Ferry — redirect rules</h1>
-  <div id="sync-error" class="err" hidden></div>
-  <div id="rules"></div>
+  <div class="wrap">
+    <header class="app">
+      <img class="logo" src="icons/icon-128.png" width="36" height="36" alt="Ferry">
+      <h1>Ferry</h1>
+      <p>Redirect requests with declarativeNetRequest rules.</p>
+    </header>
 
-  <fieldset id="form">
-    <legend>Add / edit rule</legend>
-    <input type="hidden" id="rule-id">
-    <label>Description <input type="text" id="f-desc"></label>
-    <label>Pattern type
-      <select id="f-type"><option value="wildcard">Wildcard</option><option value="regex">Regex</option></select>
-    </label>
-    <label>Include pattern <input type="text" id="f-include" placeholder="https://twitter.com/*"></label>
-    <label>Exclude pattern (optional) <input type="text" id="f-exclude"></label>
-    <label>Redirect to <input type="text" id="f-redirect" placeholder="https://nitter.net/$1"></label>
-    <div class="rtypes" id="rtypes"></div>
-    <label>Example URL (for testing) <input type="text" id="f-example"></label>
-    <div id="test-result"></div>
-    <div id="form-errors" class="err"></div>
-    <button id="save">Save rule</button>
-    <button id="test">Test</button>
-    <button id="reset">Clear form</button>
-  </fieldset>
+    <div id="sync-error" hidden></div>
 
-  <fieldset>
-    <legend>Backup</legend>
-    <button id="export">Export JSON</button>
-    <label>Import JSON <input type="file" id="import" accept="application/json"></label>
-    <div id="import-msg" class="msg"></div>
-  </fieldset>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab" role="tab" id="tab-rules" aria-controls="panel-rules" aria-selected="true">Rules</button>
+      <button class="tab" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false" tabindex="-1">Settings</button>
+    </nav>
+
+    <section id="panel-rules" role="tabpanel" aria-labelledby="tab-rules">
+    <div class="control-bar" id="control-bar">
+      <div>
+        <div class="state" id="control-state">Ferry is on</div>
+        <div class="sub" id="control-sub"></div>
+      </div>
+      <div class="spacer"></div>
+      <label class="switch" title="Enable or pause all rules">
+        <input type="checkbox" id="master-toggle" aria-label="Enable all rules">
+        <span class="track"></span>
+      </label>
+    </div>
+
+    <div id="rules"></div>
+
+    <section class="card" id="form">
+      <h2>Add / edit rule</h2>
+      <input type="hidden" id="rule-id">
+
+      <div class="field">
+        <label for="f-desc">Description <span class="hint">— a name to recognise this rule</span></label>
+        <input type="text" id="f-desc" placeholder="Twitter → Nitter">
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label for="f-type">Pattern type</label>
+          <select id="f-type">
+            <option value="wildcard">Wildcard ( * )</option>
+            <option value="regex">Regex</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-example">Example URL <span class="hint">— used by Test</span></label>
+          <input type="text" id="f-example" placeholder="https://twitter.com/jack">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="f-include">Match URLs <span class="hint">— which requests to redirect</span></label>
+        <input type="text" id="f-include" placeholder="https://twitter.com/*">
+      </div>
+
+      <div class="field">
+        <label for="f-exclude">Skip URLs <span class="hint">— optional exception pattern</span></label>
+        <input type="text" id="f-exclude" placeholder="https://twitter.com/i/*">
+      </div>
+
+      <div class="field">
+        <label for="f-redirect">Redirect to <span class="hint">— $1, $2… reuse captured groups</span></label>
+        <input type="text" id="f-redirect" placeholder="https://nitter.net/$1">
+      </div>
+
+      <div class="field">
+        <div class="rtypes" id="rtypes"></div>
+      </div>
+
+      <div id="test-result" class="chip"></div>
+      <div id="form-warnings" class="chip"></div>
+      <div id="form-errors"></div>
+
+      <div class="form-actions">
+        <button id="save" class="btn btn-primary">Save rule</button>
+        <button id="test" class="btn">Test</button>
+        <button id="reset" class="btn">Clear form</button>
+      </div>
+    </section>
+    </section>
+
+    <section id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+    <section class="card">
+      <h2>Backup</h2>
+      <div class="form-actions" style="margin-bottom:.9rem">
+        <button id="export" class="btn">Export rules (JSON)</button>
+      </div>
+      <label class="dropzone" id="dropzone" for="import">
+        <strong>Import rules</strong>
+        <span>Drag a JSON file anywhere on this page, or <span class="browse">click to browse</span>.</span>
+        <input type="file" id="import" accept="application/json">
+      </label>
+      <div id="import-msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>Add from JSON</h2>
+      <div class="field">
+        <label for="paste-json">Paste rule JSON <span class="hint">— a single rule, an array, or an exported file</span></label>
+        <textarea id="paste-json" rows="6" placeholder='{ "includePattern": "https://twitter.com/*", "redirectUrl": "https://nitter.net/$1" }'></textarea>
+      </div>
+      <div class="form-actions">
+        <button id="paste-add" class="btn btn-primary">Add from JSON</button>
+      </div>
+    </section>
+    </section>
+  </div>
+
+  <div id="drop-overlay" aria-hidden="true">
+    <div class="panel"><span aria-hidden="true">⬇️</span> Drop JSON to import</div>
+  </div>
+
+  <div id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="dialog">
+      <h3 id="modal-title"></h3>
+      <p id="modal-body"></p>
+      <div class="actions" id="modal-actions"></div>
+    </div>
+  </div>
 
   <script src="options.js"></script>
 </body>

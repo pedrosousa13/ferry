@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compile, wildcardToRegex, translateSubstitution } from '../src/compiler';
+import { compile, wildcardToRegex, translateSubstitution, lintRule } from '../src/compiler';
 import { createRule } from '../src/rule-model';
 
 describe('wildcardToRegex', () => {
@@ -93,5 +93,67 @@ describe('compile with exclude', () => {
     const out = compile([rule]);
     expect(out).toHaveLength(1);
     expect(out[0].action.type).toBe('redirect');
+  });
+});
+
+describe('lintRule', () => {
+  it('returns no warnings for a sound rule', () => {
+    const rule = createRule({
+      patternType: 'wildcard',
+      includePattern: 'https://twitter.com/*',
+      redirectUrl: 'https://nitter.net/$1',
+    });
+    expect(lintRule(rule)).toEqual([]);
+  });
+
+  it('warns when the redirect references more groups than the wildcard pattern has', () => {
+    const rule = createRule({
+      patternType: 'wildcard',
+      includePattern: 'https://twitter.com/*',
+      redirectUrl: 'https://nitter.net/$2',
+    });
+    expect(lintRule(rule).some((w) => w.includes('$2'))).toBe(true);
+  });
+
+  it('warns when a wildcard redirect uses $1 but the pattern has no wildcard', () => {
+    const rule = createRule({
+      patternType: 'wildcard',
+      includePattern: 'https://twitter.com/home',
+      redirectUrl: 'https://nitter.net/$1',
+    });
+    expect(lintRule(rule).some((w) => w.includes('no capture groups'))).toBe(true);
+  });
+
+  it('counts regex capturing groups, ignoring non-capturing groups', () => {
+    const ok = createRule({
+      patternType: 'regex',
+      includePattern: '^https://(?:www\\.)?example\\.com/(.*)$',
+      redirectUrl: 'https://dest.com/$1',
+    });
+    expect(lintRule(ok)).toEqual([]);
+    const bad = createRule({
+      patternType: 'regex',
+      includePattern: '^https://(?:www\\.)?example\\.com/(.*)$',
+      redirectUrl: 'https://dest.com/$2',
+    });
+    expect(lintRule(bad).some((w) => w.includes('only 1 capture group'))).toBe(true);
+  });
+
+  it('warns about a redirect loop when the target matches the rule’s own pattern', () => {
+    const rule = createRule({
+      patternType: 'wildcard',
+      includePattern: 'https://reddit.com/*',
+      redirectUrl: 'https://reddit.com/old/$1',
+    });
+    expect(lintRule(rule).some((w) => w.toLowerCase().includes('loop'))).toBe(true);
+  });
+
+  it('does not warn about a loop when the redirect host differs', () => {
+    const rule = createRule({
+      patternType: 'wildcard',
+      includePattern: 'https://www.reddit.com/*',
+      redirectUrl: 'https://old.reddit.com/$1',
+    });
+    expect(lintRule(rule)).toEqual([]);
   });
 });
