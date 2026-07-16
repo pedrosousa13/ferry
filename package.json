@@ -20,7 +20,7 @@
     "@types/node": "^26.1.1",
     "@types/webextension-polyfill": "^0.12.5",
     "esbuild": "^0.28.1",
-    "typescript": "^5.4.5",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10",
     "yazl": "^3.3.1"
   },
