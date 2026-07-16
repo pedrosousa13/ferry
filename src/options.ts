@@ -1,6 +1,7 @@
 import { Rule, createRule, validateRule, ALL_RESOURCE_TYPES, ResourceType } from './rule-model';
 import { getRules, setRules } from './storage';
 import { compile } from './compiler';
+import { parseImport } from './import';
 
 let rules: Rule[] = [];
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
@@ -144,31 +145,22 @@ function exportRules() {
 }
 
 async function importRules(ev: Event) {
-  const file = (ev.target as HTMLInputElement).files?.[0];
+  const input = ev.target as HTMLInputElement;
+  const file = input.files?.[0];
   if (!file) return;
-  let data: any;
+  let data: unknown;
   try { data = JSON.parse(await file.text()); } catch { $('#import-msg').textContent = 'Invalid JSON.'; return; }
-  const incoming: any[] = data.redirects ?? data.rules ?? [];
-  let skipped = 0;
-  for (const r of incoming) {
-    const usesTransform = r.processMatches && r.processMatches !== 'noProcessing';
-    if (usesTransform) { skipped++; continue; }
-    const types = (r.resourceTypes ?? r.appliesTo ?? []) as string[];
-    rules.push(createRule({
-      description: r.description,
-      patternType: r.patternType === 'R' ? 'regex' : 'wildcard',
-      includePattern: r.includePattern,
-      excludePattern: r.excludePattern,
-      redirectUrl: r.redirectUrl,
-      resourceTypes: types.filter((t) => (ALL_RESOURCE_TYPES as string[]).includes(t)) as ResourceType[],
-      example: r.exampleUrl ?? r.example,
-    }));
-  }
+  const result = parseImport(data);
+  input.value = ''; // allow re-importing the same file
+  if (result.error) { $('#import-msg').textContent = result.error; return; }
+  rules.push(...result.rules);
   await persist();
-  const imported = incoming.length - skipped;
-  $('#import-msg').textContent =
-    `Imported ${imported} rule(s).` +
-    (skipped ? ` Skipped ${skipped} rule(s) that need transforms (base64 / URL decode), which Ferry can't perform.` : '');
+  const parts = [`Imported ${result.rules.length} rule(s).`];
+  if (result.skippedTransforms) {
+    parts.push(`Skipped ${result.skippedTransforms} rule(s) that need transforms (base64 / URL decode), which Ferry can't perform.`);
+  }
+  if (result.skippedInvalid) parts.push(`Skipped ${result.skippedInvalid} invalid rule(s).`);
+  $('#import-msg').textContent = parts.join(' ');
 }
 
 function init() {
