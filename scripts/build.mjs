@@ -1,8 +1,8 @@
 import * as esbuild from 'esbuild';
-import { mkdirSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, copyFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const VERSION = '0.1.0';
+const VERSION = JSON.parse(readFileSync('package.json', 'utf8')).version;
 const NAME = 'Ferry';
 const DESCRIPTION = 'Fast, private URL redirector. Define rules; matching URLs are redirected natively.';
 
@@ -31,7 +31,14 @@ function manifest(target) {
   return {
     ...base,
     background: { scripts: ['engine.js'] },
-    browser_specific_settings: { gecko: { id: 'ferry@pedrosousa.me', strict_min_version: '128.0' } },
+    browser_specific_settings: {
+      gecko: {
+        id: 'ferry@pedrosousa.me',
+        strict_min_version: '128.0',
+        // Ferry collects nothing; AMO requires this declaration for new submissions.
+        data_collection_permissions: { required: ['none'] },
+      },
+    },
   };
 }
 
