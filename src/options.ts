@@ -1,5 +1,6 @@
+import browser from 'webextension-polyfill';
 import { Rule, createRule, validateRule, ALL_RESOURCE_TYPES, ResourceType } from './rule-model';
-import { getRules, setRules } from './storage';
+import { getRules, setRules, getSyncError } from './storage';
 import { compile } from './compiler';
 import { parseImport } from './import';
 
@@ -95,6 +96,13 @@ function fillForm(rule: Rule) {
 
 function edit(i: number) { fillForm(rules[i]); $('#form').scrollIntoView(); }
 
+async function renderSyncError() {
+  const syncError = await getSyncError();
+  const box = $('#sync-error');
+  box.textContent = syncError ?? '';
+  (box as HTMLElement).hidden = !syncError;
+}
+
 function resetForm() {
   $i('#rule-id').value = '';
   ['#f-desc', '#f-include', '#f-exclude', '#f-redirect', '#f-example'].forEach((s) => ($i(s).value = ''));
@@ -171,6 +179,10 @@ function init() {
   $('#export').addEventListener('click', exportRules);
   $i('#import').addEventListener('change', importRules);
   void getRules().then((r) => { rules = r; render(); });
+  void renderSyncError();
+  browser.storage.onChanged.addListener((changes: any, area: string) => {
+    if (area === 'local' && changes.syncError) void renderSyncError();
+  });
 }
 
 init();
