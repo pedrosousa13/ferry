@@ -118,7 +118,8 @@ function save() {
   if (errors.length) { $('#form-errors').textContent = errors.join(' '); return; }
   $('#form-errors').textContent = '';
   const idx = rules.findIndex((r) => r.id === rule.id);
-  if (idx >= 0) rules[idx] = rule; else rules.push(rule);
+  if (idx >= 0) rules[idx] = { ...rule, disabled: rules[idx].disabled };
+  else rules.push(rule);
   void persist();
   resetForm();
 }
