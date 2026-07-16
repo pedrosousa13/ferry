@@ -22,3 +22,7 @@ export async function getWhitelist(): Promise<WhitelistEntry[]> {
 export async function setWhitelist(whitelist: WhitelistEntry[]): Promise<void> {
   await browser.storage.local.set({ whitelist });
 }
+export async function getSyncError(): Promise<string | null> {
+  const { syncError } = await browser.storage.local.get({ syncError: null });
+  return syncError as string | null;
+}

@@ -271,6 +271,12 @@
     .chip.bad { background: var(--danger-soft); color: var(--danger); }
     .chip.warn { background: var(--warn-soft); color: var(--warn); font-family: inherit; }
     #form-errors { color: var(--danger); font-size: .85rem; margin-top: .3rem; min-height: 0; }
+    #sync-error {
+      background: var(--danger-soft); color: var(--danger);
+      border: 1px solid var(--danger); border-radius: var(--radius-sm);
+      padding: .7rem .9rem; margin-bottom: 1.4rem; font-size: .9rem; font-weight: 500;
+    }
+    #sync-error[hidden] { display: none; }
     #import-msg { color: var(--success); font-size: .85rem; margin-top: .5rem; }
     #import-msg.bad { color: var(--danger); }
 
@@ -323,6 +329,8 @@
       <h1>Ferry</h1>
       <p>Redirect requests with declarativeNetRequest rules.</p>
     </header>
+
+    <div id="sync-error" hidden></div>
 
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button class="tab" role="tab" id="tab-rules" aria-controls="panel-rules" aria-selected="true">Rules</button>

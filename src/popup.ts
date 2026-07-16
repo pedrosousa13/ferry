@@ -1,5 +1,5 @@
 import browser from 'webextension-polyfill';
-import { getRules, getDisabled, setDisabled } from './storage';
+import { getRules, getDisabled, setDisabled, getSyncError } from './storage';
 
 const $ = (s: string) => document.querySelector(s) as HTMLElement;
 const toggle = () => document.querySelector('#toggle') as HTMLInputElement;
@@ -11,6 +11,10 @@ async function render() {
   $('#status').textContent = disabled
     ? 'Ferry is off'
     : `Ferry is on — ${active} active rule${active === 1 ? '' : 's'}`;
+  const syncError = await getSyncError();
+  const errBox = $('#sync-error');
+  errBox.textContent = syncError ?? '';
+  (errBox as HTMLElement).hidden = !syncError;
 }
 
 toggle().addEventListener('change', async () => {

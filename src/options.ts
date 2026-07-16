@@ -1,6 +1,8 @@
+import browser from 'webextension-polyfill';
 import { Rule, createRule, validateRule, ALL_RESOURCE_TYPES, ResourceType, WhitelistEntry, createWhitelistEntry, validateWhitelistEntry } from './rule-model';
-import { getRules, setRules, getDisabled, setDisabled, getWhitelist, setWhitelist } from './storage';
+import { getRules, setRules, getDisabled, setDisabled, getWhitelist, setWhitelist, getSyncError } from './storage';
 import { compile, lintRule } from './compiler';
+import { parseImport } from './import';
 
 let rules: Rule[] = [];
 let masterDisabled = false;
@@ -287,7 +289,7 @@ function save() {
   $('#form-errors').textContent = '';
   const warnings = lintRule(rule);
   const idx = rules.findIndex((r) => r.id === rule.id);
-  if (idx >= 0) rules[idx] = rule; else rules.push(rule);
+  if (idx >= 0) rules[idx] = { ...rule, disabled: rules[idx].disabled }; else rules.push(rule);
   void persist();
   resetForm();
   if (warnings.length) setChip('#form-warnings', 'Saved, but: ' + warnings.join(' '), 'warn');
@@ -380,25 +382,16 @@ function normalizeIncoming(data: any): any[] {
 
 async function importData(data: any) {
   activateTab('tab-settings');
-  const incoming: any[] = normalizeIncoming(data);
+  // parseImport owns format detection (Ferry / Redirector), per-rule validation,
+  // transform-skipping and id regeneration. normalizeIncoming still handles the
+  // paste conveniences (a bare array or a single rule object) before handing off.
+  const result = parseImport({ redirects: normalizeIncoming(data) });
 
-  let skippedTransform = 0;
+  const skippedTransform = result.skippedTransforms;
   let dupInFile = 0;
   const candidates: Rule[] = [];
   const seen = new Set<string>();
-  for (const r of incoming) {
-    const usesTransform = r.processMatches && r.processMatches !== 'noProcessing';
-    if (usesTransform) { skippedTransform++; continue; }
-    const types = (r.resourceTypes ?? r.appliesTo ?? []) as string[];
-    const rule = createRule({
-      description: r.description,
-      patternType: r.patternType === 'R' ? 'regex' : 'wildcard',
-      includePattern: r.includePattern,
-      excludePattern: r.excludePattern,
-      redirectUrl: r.redirectUrl,
-      resourceTypes: types.filter((t) => (ALL_RESOURCE_TYPES as string[]).includes(t)) as ResourceType[],
-      example: r.exampleUrl ?? r.example,
-    });
+  for (const rule of result.rules) {
     const sig = ruleSignature(rule);
     if (seen.has(sig)) { dupInFile++; continue; }
     seen.add(sig);
@@ -414,9 +407,12 @@ async function importData(data: any) {
   const transformNote = skippedTransform
     ? ` Skipped ${skippedTransform} rule(s) that need transforms (base64 / URL decode), which Ferry can't perform.`
     : '';
+  const invalidNote = result.skippedInvalid
+    ? ` Skipped ${result.skippedInvalid} invalid rule(s).`
+    : '';
 
   if (candidates.length === 0 && wlCandidates.length === 0) {
-    setImportMsg('No importable rules found in this file.' + transformNote, true);
+    setImportMsg('No importable rules found in this file.' + transformNote + invalidNote, true);
     return;
   }
 
@@ -470,6 +466,7 @@ async function importData(data: any) {
   const parts = [`Imported ${importedCount} rule(s)${wlDone}${mode === 'replace' ? ' (replaced all)' : ''}.`];
   if (dupTotal) parts.push(`Skipped ${dupTotal} duplicate(s).`);
   if (skippedTransform) parts.push(transformNote.trim());
+  if (result.skippedInvalid) parts.push(invalidNote.trim());
   setImportMsg(parts.join(' '));
 }
 
@@ -603,6 +600,13 @@ function setupTabs() {
   });
 }
 
+async function renderSyncError() {
+  const syncError = await getSyncError();
+  const box = $('#sync-error');
+  box.textContent = syncError ?? '';
+  box.hidden = !syncError;
+}
+
 function init() {
   renderResourceTypes();
   setupTabs();
@@ -626,6 +630,10 @@ function init() {
     whitelist = w;
     render();
     renderWhitelist();
+  });
+  void renderSyncError();
+  browser.storage.onChanged.addListener((changes: any, area: string) => {
+    if (area === 'local' && changes.syncError) void renderSyncError();
   });
 }
 
