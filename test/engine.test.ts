@@ -1,15 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const state = { rules: [] as any[], disabled: false };
-const { updateDynamicRules, getDynamicRules } = vi.hoisted(() => ({
-  updateDynamicRules: vi.fn(async () => {}),
+const { updateDynamicRules, getDynamicRules, storageSet } = vi.hoisted(() => ({
+  updateDynamicRules: vi.fn(async (_arg?: any) => {}),
   getDynamicRules: vi.fn(async () => [{ id: 99 }]),
+  storageSet: vi.fn(async () => {}),
 }));
 
 vi.mock('webextension-polyfill', () => ({
   default: {
     storage: {
-      local: { get: vi.fn(async (defaults: any) => ({ ...defaults, ...state })) },
+      local: { get: vi.fn(async (defaults: any) => ({ ...defaults, ...state })), set: storageSet },
       onChanged: { addListener: vi.fn() },
     },
     declarativeNetRequest: { getDynamicRules, updateDynamicRules },
@@ -17,11 +18,13 @@ vi.mock('webextension-polyfill', () => ({
   },
 }));
 
-import { syncRules } from '../src/engine';
+import { syncRules, scheduleSync } from '../src/engine';
 import { createRule } from '../src/rule-model';
 
 beforeEach(() => {
   updateDynamicRules.mockClear();
+  storageSet.mockClear();
+  updateDynamicRules.mockImplementation(async () => {});
   state.disabled = false;
   state.rules = [];
 });
@@ -44,5 +47,58 @@ describe('syncRules', () => {
     const arg = (updateDynamicRules.mock.calls as any)[0][0];
     expect(arg.removeRuleIds).toEqual([99]);
     expect(arg.addRules).toEqual([]);
+  });
+});
+
+describe('syncRules error isolation', () => {
+  it('clears syncError on success', async () => {
+    state.rules = [createRule({ id: 'a', includePattern: 'https://x/*', redirectUrl: 'https://y/$1' })];
+    await syncRules();
+    expect(storageSet).toHaveBeenCalledWith({ syncError: null });
+  });
+
+  it('falls back to per-rule adds and records which rule failed', async () => {
+    state.rules = [
+      createRule({ id: 'good', description: 'good', includePattern: 'https://x/*', redirectUrl: 'https://y/$1' }),
+      createRule({ id: 'bad', description: 'bad rule', patternType: 'regex', includePattern: 'x(?=y)', redirectUrl: 'https://y/' }),
+    ];
+    updateDynamicRules.mockImplementation(async (arg: any) => {
+      // Reject any call that adds the bad rule's compiled regex.
+      if (arg.addRules?.some((r: any) => r.condition.regexFilter.includes('(?='))) {
+        throw new Error('Rule with id 3 is invalid');
+      }
+    });
+    await syncRules();
+    // batch attempt + cleanup remove + one add per compiled rule
+    expect(updateDynamicRules.mock.calls.length).toBeGreaterThanOrEqual(3);
+    const errCall = storageSet.mock.calls.find((c: any[]) => typeof c[0].syncError === 'string');
+    expect(errCall).toBeTruthy();
+    expect((errCall as any)[0].syncError).toContain('bad rule');
+  });
+});
+
+describe('scheduleSync', () => {
+  it('serializes overlapping syncs', async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    updateDynamicRules.mockImplementation(async () => {
+      order.push('start');
+      await gate; // resolved for all calls once released; only the first call actually blocks
+      order.push('end');
+    });
+    const first = scheduleSync();
+    const second = scheduleSync();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(order).toEqual(['start']); // second sync must not start while the first is blocked
+    release();
+    await first;
+    await second;
+    // Both syncs ran, strictly one after the other: start/end pairs never interleave.
+    expect(order.filter((x) => x === 'start')).toHaveLength(order.filter((x) => x === 'end').length);
+    for (let i = 0; i < order.length; i += 2) {
+      expect(order[i]).toBe('start');
+      expect(order[i + 1]).toBe('end');
+    }
   });
 });
