@@ -75,6 +75,22 @@ describe('syncRules error isolation', () => {
     expect(errCall).toBeTruthy();
     expect((errCall as any)[0].syncError).toContain('bad rule');
   });
+
+  it('clears syncError when the batch fails transiently but every per-rule add succeeds', async () => {
+    state.rules = [createRule({ id: 'a', includePattern: 'https://x/*', redirectUrl: 'https://y/$1' })];
+    let firstBatch = true;
+    updateDynamicRules.mockImplementation(async (arg: any) => {
+      // Fail the initial batch (non-empty addRules) once, as a transient error;
+      // every subsequent per-rule add succeeds.
+      if (firstBatch && arg.addRules?.length) {
+        firstBatch = false;
+        throw new Error('transient failure');
+      }
+    });
+    await syncRules();
+    const calls = storageSet.mock.calls as any[];
+    expect(calls[calls.length - 1][0]).toEqual({ syncError: null });
+  });
 });
 
 describe('scheduleSync', () => {

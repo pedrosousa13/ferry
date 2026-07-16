@@ -31,7 +31,9 @@ export async function syncRules(): Promise<void> {
     }
     const names = failed.map((r) => r.description || r.includePattern).join(', ');
     await browser.storage.local.set({
-      syncError: `The browser rejected ${failed.length} rule(s): ${names}. The remaining rules are active.`,
+      syncError: failed.length
+        ? `The browser rejected ${failed.length} rule(s): ${names}. The remaining rules are active.`
+        : null,
     });
   }
 }
