@@ -47,6 +47,10 @@ describe('ruleMatchesUrl', () => {
     const rule = createRule({ includePattern: '', redirectUrl: 'https://x.example/' });
     expect(ruleMatchesUrl(rule, 'https://twitter.com/jack')).toBe(false);
   });
+
+  it('matches case-insensitively, like DNR regexFilter', () => {
+    expect(ruleMatchesUrl(createRule(base), 'https://TWITTER.com/jack')).toBe(true);
+  });
 });
 
 describe('whitelistMatchesUrl', () => {
