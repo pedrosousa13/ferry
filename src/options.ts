@@ -10,6 +10,21 @@ let whitelist: WhitelistEntry[] = [];
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const $i = (sel: string) => document.querySelector(sel) as HTMLInputElement;
 
+const ruleDialog = () => document.querySelector('#rule-dialog') as HTMLDialogElement;
+
+function openDialog(rule?: Rule) {
+  resetForm();
+  if (rule) {
+    fillForm(rule);
+    $('#dialog-title').textContent = `Edit rule — ${rule.description || 'Unnamed rule'}`;
+  } else {
+    $('#dialog-title').textContent = 'Add rule';
+  }
+  ruleDialog().showModal();
+}
+
+function closeDialog() { ruleDialog().close(); }
+
 interface ResourceMeta { label: string; hint: string; short: string; advanced: boolean; }
 
 const RESOURCE_TYPE_META: Record<ResourceType, ResourceMeta> = {
@@ -263,7 +278,7 @@ function fillForm(rule: Rule) {
   });
 }
 
-function edit(i: number) { fillForm(rules[i]); $('#form').scrollIntoView({ behavior: 'smooth' }); }
+function edit(i: number) { openDialog(rules[i]); }
 
 function setChip(sel: string, text: string, kind: 'ok' | 'bad' | 'warn') {
   const el = $(sel);
@@ -291,8 +306,12 @@ function save() {
   const idx = rules.findIndex((r) => r.id === rule.id);
   if (idx >= 0) rules[idx] = { ...rule, disabled: rules[idx].disabled }; else rules.push(rule);
   void persist();
-  resetForm();
-  if (warnings.length) setChip('#form-warnings', 'Saved, but: ' + warnings.join(' '), 'warn');
+  if (warnings.length) {
+    setChip('#form-warnings', 'Saved, but: ' + warnings.join(' '), 'warn');
+  } else {
+    resetForm();
+    closeDialog();
+  }
 }
 
 function test() {
@@ -612,7 +631,9 @@ function init() {
   setupTabs();
   $('#save').addEventListener('click', save);
   $('#test').addEventListener('click', test);
-  $('#reset').addEventListener('click', resetForm);
+  $('#add-rule').addEventListener('click', () => openDialog());
+  $('#cancel').addEventListener('click', closeDialog);
+  ruleDialog().addEventListener('click', (e) => { if (e.target === ruleDialog()) closeDialog(); });
   $('#export').addEventListener('click', exportRules);
   $i('#import').addEventListener('change', onImportInput);
   $('#paste-add').addEventListener('click', addFromPaste);

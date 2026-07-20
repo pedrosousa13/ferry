@@ -320,6 +320,18 @@
     #modal h3 { margin: 0 0 .5rem; font-size: 1.1rem; }
     #modal p { margin: 0 0 1.2rem; color: var(--muted); font-size: .92rem; }
     #modal .actions { display: flex; gap: .6rem; justify-content: flex-end; flex-wrap: wrap; }
+
+    /* ---- rule dialog ---- */
+    .rules-toolbar { display: flex; gap: .6rem; align-items: center; margin-bottom: .9rem; }
+    dialog#rule-dialog {
+      border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--surface); color: var(--text);
+      box-shadow: 0 10px 40px rgba(0,0,0,.3); padding: 0;
+      width: min(640px, calc(100vw - 2rem)); max-height: calc(100vh - 4rem);
+    }
+    dialog#rule-dialog::backdrop { background: rgba(10,14,18,.45); }
+    dialog#rule-dialog #form { padding: 1.4rem 1.5rem; }
+    #dialog-title { font-size: 1.1rem; margin: 0 0 1rem; }
   </style>
 </head>
 <body>
@@ -351,10 +363,15 @@
       </label>
     </div>
 
+    <div class="rules-toolbar">
+      <button id="add-rule" class="btn btn-primary">Add rule</button>
+    </div>
+
     <div id="rules"></div>
 
-    <section class="card" id="form">
-      <h2>Add / edit rule</h2>
+    <dialog id="rule-dialog">
+    <section id="form">
+      <h2 id="dialog-title">Add rule</h2>
       <input type="hidden" id="rule-id">
 
       <div class="field">
@@ -402,9 +419,10 @@
       <div class="form-actions">
         <button id="save" class="btn btn-primary">Save rule</button>
         <button id="test" class="btn">Test</button>
-        <button id="reset" class="btn">Clear form</button>
+        <button id="cancel" class="btn">Cancel</button>
       </div>
     </section>
+    </dialog>
     </section>
 
     <section id="panel-whitelist" role="tabpanel" aria-labelledby="tab-whitelist" hidden>
