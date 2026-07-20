@@ -107,6 +107,11 @@ async function init() {
     getRules(), getDisabled(), getWhitelist(), activeTabUrl(),
   ]);
   render();
+  // Enable transitions only after the first frame has painted; adding the
+  // class in the same task as render() would still animate the initial state.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.body.classList.add('ready');
+  }));
   void renderSyncError();
 }
 void init();
