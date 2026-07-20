@@ -37,7 +37,7 @@ await options.screenshot({ path: join(outDir, '1-options.png') });
 const popup = await context.newPage();
 await popup.setViewportSize({ width: 640, height: 400 });
 await popup.goto(`chrome-extension://${extensionId}/popup.html`);
-await popup.waitForSelector('#status:not(:empty)');
+await popup.waitForSelector('#count:not(:empty)');
 await popup.screenshot({ path: join(outDir, '2-popup.png') });
 
 await context.close();

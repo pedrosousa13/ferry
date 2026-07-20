@@ -5,10 +5,32 @@ import { compile, lintRule } from './compiler';
 import { parseImport } from './import';
 
 let rules: Rule[] = [];
+let dragIndex: number | null = null;
 let masterDisabled = false;
 let whitelist: WhitelistEntry[] = [];
+let filterQuery = '';
+
+function filterMatches(rule: Rule, q: string): boolean {
+  return [rule.description, rule.includePattern, rule.excludePattern, rule.redirectUrl]
+    .some((s) => s.toLowerCase().includes(q));
+}
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const $i = (sel: string) => document.querySelector(sel) as HTMLInputElement;
+
+const ruleDialog = () => document.querySelector('#rule-dialog') as HTMLDialogElement;
+
+function openDialog(rule?: Rule) {
+  resetForm();
+  if (rule) {
+    fillForm(rule);
+    $('#dialog-title').textContent = `Edit rule — ${rule.description || 'Unnamed rule'}`;
+  } else {
+    $('#dialog-title').textContent = 'Add rule';
+  }
+  ruleDialog().showModal();
+}
+
+function closeDialog() { ruleDialog().close(); }
 
 interface ResourceMeta { label: string; hint: string; short: string; advanced: boolean; }
 
@@ -183,14 +205,50 @@ function ruleCard(rule: Rule, i: number): HTMLElement {
     badges.append(warn);
   }
 
+  const filtering = filterQuery.trim().length > 0;
+  card.draggable = !filtering;
+
   const actions = document.createElement('div');
   actions.className = 'rule-card__actions';
+  if (!filtering) {
+    actions.append(
+      iconButton('up', 'Move up', () => move(i, -1), { disabled: i === 0 }),
+      iconButton('down', 'Move down', () => move(i, 1), { disabled: i === rules.length - 1 }),
+    );
+  }
   actions.append(
-    iconButton('up', 'Move up', () => move(i, -1), { disabled: i === 0 }),
-    iconButton('down', 'Move down', () => move(i, 1), { disabled: i === rules.length - 1 }),
     iconButton('edit', 'Edit', () => edit(i)),
     iconButton('delete', 'Delete', () => del(i), { danger: true }),
   );
+
+  card.addEventListener('dragstart', (e) => {
+    dragIndex = i;
+    card.classList.add('dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(i)); // Firefox needs data for DnD to start
+    }
+  });
+  card.addEventListener('dragend', () => {
+    dragIndex = null;
+    card.classList.remove('dragging');
+    document.querySelectorAll('.rule-card.drop-target').forEach((el) => el.classList.remove('drop-target'));
+  });
+  card.addEventListener('dragover', (e) => {
+    if (dragIndex === null || dragIndex === i) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    card.classList.add('drop-target');
+  });
+  card.addEventListener('dragleave', () => card.classList.remove('drop-target'));
+  card.addEventListener('drop', (e) => {
+    if (dragIndex === null || dragIndex === i) return;
+    e.preventDefault();
+    const [moved] = rules.splice(dragIndex, 1);
+    rules.splice(i, 0, moved);
+    dragIndex = null;
+    void persist();
+  });
 
   card.append(title, toggleSwitch(rule, i), flow, badges, actions);
   return card;
@@ -212,14 +270,19 @@ function render() {
   const list = $('#rules');
   list.classList.toggle('paused', masterDisabled);
   list.innerHTML = '';
+  const q = filterQuery.trim().toLowerCase();
+  const visible = rules.map((rule, i) => ({ rule, i })).filter(({ rule }) => !q || filterMatches(rule, q));
+  const count = $('#filter-count');
+  count.hidden = !q;
+  if (q) count.textContent = `${visible.length} of ${rules.length} rules`;
   if (rules.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.innerHTML = '<strong>No redirect rules yet</strong>Add your first rule using the form below.';
+    empty.innerHTML = '<strong>No redirect rules yet</strong>Add your first rule with the button above.';
     list.appendChild(empty);
     return;
   }
-  rules.forEach((rule, i) => list.appendChild(ruleCard(rule, i)));
+  visible.forEach(({ rule, i }) => list.appendChild(ruleCard(rule, i)));
 }
 
 async function persist() { await setRules(rules); render(); }
@@ -263,7 +326,7 @@ function fillForm(rule: Rule) {
   });
 }
 
-function edit(i: number) { fillForm(rules[i]); $('#form').scrollIntoView({ behavior: 'smooth' }); }
+function edit(i: number) { openDialog(rules[i]); }
 
 function setChip(sel: string, text: string, kind: 'ok' | 'bad' | 'warn') {
   const el = $(sel);
@@ -289,10 +352,15 @@ function save() {
   $('#form-errors').textContent = '';
   const warnings = lintRule(rule);
   const idx = rules.findIndex((r) => r.id === rule.id);
-  if (idx >= 0) rules[idx] = { ...rule, disabled: rules[idx].disabled }; else rules.push(rule);
+  if (idx >= 0) rules[idx] = { ...rule, disabled: rules[idx].disabled };
+  else { rules.push(rule); $i('#rule-id').value = rule.id; }
   void persist();
-  resetForm();
-  if (warnings.length) setChip('#form-warnings', 'Saved, but: ' + warnings.join(' '), 'warn');
+  if (warnings.length) {
+    setChip('#form-warnings', 'Saved, but: ' + warnings.join(' '), 'warn');
+  } else {
+    resetForm();
+    closeDialog();
+  }
 }
 
 function test() {
@@ -612,7 +680,10 @@ function init() {
   setupTabs();
   $('#save').addEventListener('click', save);
   $('#test').addEventListener('click', test);
-  $('#reset').addEventListener('click', resetForm);
+  $('#add-rule').addEventListener('click', () => openDialog());
+  $i('#filter').addEventListener('input', () => { filterQuery = $i('#filter').value; render(); });
+  $('#cancel').addEventListener('click', closeDialog);
+  ruleDialog().addEventListener('click', (e) => { if (e.target === ruleDialog()) closeDialog(); });
   $('#export').addEventListener('click', exportRules);
   $i('#import').addEventListener('change', onImportInput);
   $('#paste-add').addEventListener('click', addFromPaste);
@@ -635,6 +706,11 @@ function init() {
   browser.storage.onChanged.addListener((changes: any, area: string) => {
     if (area === 'local' && changes.syncError) void renderSyncError();
   });
+  // Enable transitions only after the first frame has painted; adding the
+  // class in the same task as render() would still animate the initial state.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.body.classList.add('ready');
+  }));
 }
 
 init();
