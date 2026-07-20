@@ -4,21 +4,125 @@
   <meta charset="utf-8">
   <title>Ferry</title>
   <style>
-    body { font: 14px system-ui, sans-serif; width: 240px; padding: .8rem; }
-    h1 { font-size: 1rem; margin: 0 0 .6rem; }
-    .row { display: flex; align-items: center; gap: .5rem; margin: .5rem 0; }
-    #status { color: #555; }
-    .err { color: #b00; }
+    :root {
+      --bg: #ffffff; --surface-2: #f0f3f6; --border: #e2e6ea; --border-strong: #cdd4db;
+      --text: #1b1f24; --muted: #5c6670;
+      --accent: #0d7d8a; --accent-fg: #ffffff; --accent-soft: #e2f3f5;
+      --danger: #c0392b; --danger-soft: #fbe9e7;
+      --radius-sm: 8px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1d2126; --surface-2: #23282e; --border: #2e353c; --border-strong: #3a424a;
+        --text: #e7eaee; --muted: #9aa4b0;
+        --accent: #2bb7c7; --accent-fg: #07252a; --accent-soft: #14323a;
+        --danger: #f08a7f; --danger-soft: #3a1f1c;
+      }
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      width: 300px; margin: 0;
+      font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg); color: var(--text);
+    }
+
+    header { display: flex; align-items: center; gap: .5rem; padding: .75rem .9rem .6rem; }
+    header img { width: 20px; height: 20px; border-radius: 5px; }
+    header h1 { font-size: .95rem; margin: 0; flex: 1; letter-spacing: -.01em; }
+    header h1 .paused-label { color: var(--muted); font-weight: 400; font-size: .78rem; }
+
+    .switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+    .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .switch .track {
+      width: 38px; height: 22px; border-radius: 999px; position: relative; flex: none;
+      background: var(--border-strong); transition: background .15s;
+    }
+    .switch .track::after {
+      content: ""; position: absolute; top: 3px; left: 3px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s;
+    }
+    .switch input:checked + .track { background: var(--accent); }
+    .switch input:checked + .track::after { transform: translateX(16px); }
+    .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .switch input:disabled + .track { cursor: default; }
+    .switch.sm .track { width: 30px; height: 18px; }
+    .switch.sm .track::after { width: 12px; height: 12px; }
+    .switch.sm input:checked + .track::after { transform: translateX(12px); }
+
+    #sync-error {
+      margin: 0 .6rem .5rem; padding: .5rem .6rem;
+      background: var(--danger-soft); color: var(--danger);
+      border: 1px solid var(--danger); border-radius: var(--radius-sm); font-size: .78rem;
+    }
+    #wl-note {
+      margin: 0 .6rem .5rem; padding: .45rem .6rem;
+      background: var(--accent-soft); color: var(--accent);
+      border-radius: var(--radius-sm); font-size: .78rem; font-weight: 500;
+    }
+
+    #rules { padding: 0 .5rem .35rem; max-height: 250px; overflow-y: auto; }
+    body.paused #rules { opacity: .45; filter: grayscale(.6); }
+    .rule {
+      display: flex; align-items: center; gap: .6rem;
+      padding: .5rem .55rem; border-radius: var(--radius-sm); border: 1px solid transparent;
+    }
+    .rule + .rule { margin-top: 2px; }
+    .rule.off { opacity: .5; }
+    .rule.matched { background: var(--accent-soft); border-color: var(--accent); }
+    .rule .name { flex: 1; min-width: 0; }
+    .rule .name .title {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500;
+    }
+    .rule .match-note { display: block; font-size: .72rem; color: var(--accent); font-weight: 500; }
+
+    #empty { text-align: center; padding: 1.4rem 1rem 1.6rem; color: var(--muted); }
+    .btn {
+      font: inherit; font-weight: 600; cursor: pointer; margin-top: .7rem;
+      border-radius: var(--radius-sm); padding: .45rem .8rem;
+      border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg);
+    }
+    .btn:hover { filter: brightness(1.07); }
+    .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    footer {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .6rem .9rem; border-top: 1px solid var(--border);
+      font-size: .78rem; color: var(--muted);
+    }
+    .linkbtn {
+      background: none; border: none; padding: 0; cursor: pointer;
+      color: var(--accent); font: inherit; font-size: .8rem; font-weight: 600;
+    }
+    .linkbtn:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <h1>Ferry</h1>
-  <div class="row">
-    <label><input type="checkbox" id="toggle"> Enabled</label>
+  <header>
+    <img src="icons/icon-32.png" alt="">
+    <h1>Ferry <span class="paused-label" id="paused-label" hidden>— paused</span></h1>
+    <label class="switch" title="Enable or pause all rules">
+      <input type="checkbox" id="toggle" aria-label="Enable all rules">
+      <span class="track"></span>
+    </label>
+  </header>
+
+  <div id="sync-error" hidden></div>
+  <div id="wl-note" hidden>This site is whitelisted — no redirects here.</div>
+
+  <div id="rules"></div>
+
+  <div id="empty" hidden>
+    <div>No rules yet.<br>Create your first redirect.</div>
+    <button id="create-rule" class="btn">Create a rule</button>
   </div>
-  <div id="status"></div>
-  <div id="sync-error" class="err" hidden></div>
-  <div class="row"><button id="open-options">Manage rules</button></div>
+
+  <footer id="footer">
+    <span id="count"></span>
+    <button id="open-options" class="linkbtn">Manage rules →</button>
+  </footer>
+
   <script src="popup.js"></script>
 </body>
 </html>
