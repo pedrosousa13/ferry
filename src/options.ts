@@ -352,7 +352,8 @@ function save() {
   $('#form-errors').textContent = '';
   const warnings = lintRule(rule);
   const idx = rules.findIndex((r) => r.id === rule.id);
-  if (idx >= 0) rules[idx] = { ...rule, disabled: rules[idx].disabled }; else rules.push(rule);
+  if (idx >= 0) rules[idx] = { ...rule, disabled: rules[idx].disabled };
+  else { rules.push(rule); $i('#rule-id').value = rule.id; }
   void persist();
   if (warnings.length) {
     setChip('#form-warnings', 'Saved, but: ' + warnings.join(' '), 'warn');

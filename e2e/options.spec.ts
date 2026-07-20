@@ -83,6 +83,28 @@ test('dragging a rule card reorders and persists', async () => {
   }
 });
 
+test('re-saving a new rule with lint warnings does not duplicate it', async () => {
+  const context = await launchWithExtension();
+  try {
+    const worker = await getServiceWorker(context);
+    const extensionId = new URL(worker.url()).host;
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/options.html`);
+
+    await page.click('#add-rule');
+    await page.fill('#f-desc', 'warned rule');
+    // Redirect target matches the rule's own pattern -> lint warning, dialog stays open
+    await page.fill('#f-include', 'https://a.example/*');
+    await page.fill('#f-redirect', 'https://a.example/loop');
+    await page.click('#save');
+    await expect(page.locator('#form-warnings')).toBeVisible(); // dialog stayed open with warning
+    await page.click('#save'); // second click must update, not duplicate
+    await expect(page.locator('.rule-card')).toHaveCount(1);
+  } finally {
+    await context.close();
+  }
+});
+
 test('filter narrows the rules list and disables reordering', async () => {
   const context = await launchWithExtension();
   try {
