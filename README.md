@@ -5,6 +5,11 @@ Fast, private URL redirector for Chrome and Firefox. Manifest V3, pure
 path), and the extension never observes the URLs you visit. No telemetry, no
 network calls. See [PRIVACY.md](PRIVACY.md).
 
+## Install
+
+- [Chrome Web Store](https://chromewebstore.google.com/detail/ferry/mnlbkdldfkcafbokmipkeegheaaldmgd)
+- [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/ferry-private-url-redirector/)
+
 ## Install from source
 
 `dist/` is not committed — build it:
