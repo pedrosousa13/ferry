@@ -705,6 +705,11 @@ function init() {
   browser.storage.onChanged.addListener((changes: any, area: string) => {
     if (area === 'local' && changes.syncError) void renderSyncError();
   });
+  // Enable transitions only after the first frame has painted; adding the
+  // class in the same task as render() would still animate the initial state.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.body.classList.add('ready');
+  }));
 }
 
 init();
