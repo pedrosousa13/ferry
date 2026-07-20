@@ -54,3 +54,31 @@ test('cancel closes the dialog without saving', async () => {
     await context.close();
   }
 });
+
+test('dragging a rule card reorders and persists', async () => {
+  const context = await launchWithExtension();
+  try {
+    const worker = await getServiceWorker(context);
+    const extensionId = new URL(worker.url()).host;
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/options.html`);
+
+    for (const [desc, include] of [['first', 'https://a.example/*'], ['second', 'https://b.example/*']]) {
+      await page.click('#add-rule');
+      await page.fill('#f-desc', desc);
+      await page.fill('#f-include', include);
+      await page.fill('#f-redirect', 'https://c.example/$1');
+      await page.click('#save');
+      await expect(page.locator('#rule-dialog')).toBeHidden();
+    }
+    await expect(page.locator('.rule-card__title')).toHaveText(['first', 'second']);
+
+    await page.locator('.rule-card').nth(1).dragTo(page.locator('.rule-card').nth(0));
+    await expect(page.locator('.rule-card__title')).toHaveText(['second', 'first']);
+
+    await page.reload();
+    await expect(page.locator('.rule-card__title')).toHaveText(['second', 'first']); // persisted
+  } finally {
+    await context.close();
+  }
+});

@@ -123,6 +123,9 @@
     }
     .rule-card:hover { border-color: var(--border-strong); }
     .rule-card.disabled { opacity: .55; }
+    .rule-card[draggable="true"] { cursor: grab; }
+    .rule-card.dragging { opacity: .4; cursor: grabbing; }
+    .rule-card.drop-target { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
     .rule-card__title { grid-area: main; font-weight: 600; font-size: 1rem; min-width: 0; }
     .rule-card__title .unnamed { color: var(--muted); font-weight: 500; font-style: italic; }
     .rule-card__flow {

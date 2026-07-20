@@ -5,6 +5,7 @@ import { compile, lintRule } from './compiler';
 import { parseImport } from './import';
 
 let rules: Rule[] = [];
+let dragIndex: number | null = null;
 let masterDisabled = false;
 let whitelist: WhitelistEntry[] = [];
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
@@ -206,6 +207,36 @@ function ruleCard(rule: Rule, i: number): HTMLElement {
     iconButton('edit', 'Edit', () => edit(i)),
     iconButton('delete', 'Delete', () => del(i), { danger: true }),
   );
+
+  card.draggable = true;
+  card.addEventListener('dragstart', (e) => {
+    dragIndex = i;
+    card.classList.add('dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(i)); // Firefox needs data for DnD to start
+    }
+  });
+  card.addEventListener('dragend', () => {
+    dragIndex = null;
+    card.classList.remove('dragging');
+    document.querySelectorAll('.rule-card.drop-target').forEach((el) => el.classList.remove('drop-target'));
+  });
+  card.addEventListener('dragover', (e) => {
+    if (dragIndex === null || dragIndex === i) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    card.classList.add('drop-target');
+  });
+  card.addEventListener('dragleave', () => card.classList.remove('drop-target'));
+  card.addEventListener('drop', (e) => {
+    if (dragIndex === null || dragIndex === i) return;
+    e.preventDefault();
+    const [moved] = rules.splice(dragIndex, 1);
+    rules.splice(i, 0, moved);
+    dragIndex = null;
+    void persist();
+  });
 
   card.append(title, toggleSwitch(rule, i), flow, badges, actions);
   return card;
