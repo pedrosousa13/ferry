@@ -82,3 +82,40 @@ test('dragging a rule card reorders and persists', async () => {
     await context.close();
   }
 });
+
+test('filter narrows the rules list and disables reordering', async () => {
+  const context = await launchWithExtension();
+  try {
+    const worker = await getServiceWorker(context);
+    const extensionId = new URL(worker.url()).host;
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/options.html`);
+
+    for (const [desc, include] of [['Twitter to Nitter', 'https://twitter.com/*'], ['YouTube to Invidious', 'https://youtube.com/*']]) {
+      await page.click('#add-rule');
+      await page.fill('#f-desc', desc);
+      await page.fill('#f-include', include);
+      await page.fill('#f-redirect', 'https://c.example/$1');
+      await page.click('#save');
+      await expect(page.locator('#rule-dialog')).toBeHidden();
+    }
+
+    await page.fill('#filter', 'nitter');
+    await expect(page.locator('.rule-card')).toHaveCount(1);
+    await expect(page.locator('.rule-card__title')).toHaveText('Twitter to Nitter');
+    await expect(page.locator('#filter-count')).toHaveText('1 of 2 rules');
+    await expect(page.locator('.rule-card button[aria-label="Move up"]')).toHaveCount(0);
+    await expect(page.locator('.rule-card[draggable="true"]')).toHaveCount(0);
+
+    // matches pattern text too, not just descriptions
+    await page.fill('#filter', 'youtube.com');
+    await expect(page.locator('.rule-card__title')).toHaveText('YouTube to Invidious');
+
+    await page.fill('#filter', '');
+    await expect(page.locator('.rule-card')).toHaveCount(2);
+    await expect(page.locator('#filter-count')).toBeHidden();
+    await expect(page.locator('.rule-card[draggable="true"]')).toHaveCount(2);
+  } finally {
+    await context.close();
+  }
+});

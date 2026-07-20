@@ -8,6 +8,12 @@ let rules: Rule[] = [];
 let dragIndex: number | null = null;
 let masterDisabled = false;
 let whitelist: WhitelistEntry[] = [];
+let filterQuery = '';
+
+function filterMatches(rule: Rule, q: string): boolean {
+  return [rule.description, rule.includePattern, rule.excludePattern, rule.redirectUrl]
+    .some((s) => s.toLowerCase().includes(q));
+}
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const $i = (sel: string) => document.querySelector(sel) as HTMLInputElement;
 
@@ -199,16 +205,22 @@ function ruleCard(rule: Rule, i: number): HTMLElement {
     badges.append(warn);
   }
 
+  const filtering = filterQuery.trim().length > 0;
+  card.draggable = !filtering;
+
   const actions = document.createElement('div');
   actions.className = 'rule-card__actions';
+  if (!filtering) {
+    actions.append(
+      iconButton('up', 'Move up', () => move(i, -1), { disabled: i === 0 }),
+      iconButton('down', 'Move down', () => move(i, 1), { disabled: i === rules.length - 1 }),
+    );
+  }
   actions.append(
-    iconButton('up', 'Move up', () => move(i, -1), { disabled: i === 0 }),
-    iconButton('down', 'Move down', () => move(i, 1), { disabled: i === rules.length - 1 }),
     iconButton('edit', 'Edit', () => edit(i)),
     iconButton('delete', 'Delete', () => del(i), { danger: true }),
   );
 
-  card.draggable = true;
   card.addEventListener('dragstart', (e) => {
     dragIndex = i;
     card.classList.add('dragging');
@@ -258,14 +270,19 @@ function render() {
   const list = $('#rules');
   list.classList.toggle('paused', masterDisabled);
   list.innerHTML = '';
+  const q = filterQuery.trim().toLowerCase();
+  const visible = rules.map((rule, i) => ({ rule, i })).filter(({ rule }) => !q || filterMatches(rule, q));
+  const count = $('#filter-count');
+  count.hidden = !q;
+  if (q) count.textContent = `${visible.length} of ${rules.length} rules`;
   if (rules.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.innerHTML = '<strong>No redirect rules yet</strong>Add your first rule using the form below.';
+    empty.innerHTML = '<strong>No redirect rules yet</strong>Add your first rule with the button above.';
     list.appendChild(empty);
     return;
   }
-  rules.forEach((rule, i) => list.appendChild(ruleCard(rule, i)));
+  visible.forEach(({ rule, i }) => list.appendChild(ruleCard(rule, i)));
 }
 
 async function persist() { await setRules(rules); render(); }
@@ -663,6 +680,7 @@ function init() {
   $('#save').addEventListener('click', save);
   $('#test').addEventListener('click', test);
   $('#add-rule').addEventListener('click', () => openDialog());
+  $i('#filter').addEventListener('input', () => { filterQuery = $i('#filter').value; render(); });
   $('#cancel').addEventListener('click', closeDialog);
   ruleDialog().addEventListener('click', (e) => { if (e.target === ruleDialog()) closeDialog(); });
   $('#export').addEventListener('click', exportRules);
