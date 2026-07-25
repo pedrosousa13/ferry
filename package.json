@@ -15,7 +15,7 @@
     "source": "git archive --format=zip -o ferry-source.zip HEAD"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.0",
+    "@playwright/test": "^1.62.0",
     "@types/chrome": "^0.2.2",
     "@types/node": "^26.1.1",
     "@types/webextension-polyfill": "^0.12.5",
